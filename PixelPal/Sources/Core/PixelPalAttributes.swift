@@ -15,15 +15,11 @@ struct PixelPalAttributes: ActivityAttributes {
         /// Raw gender string: "male" or "female".
         var genderRaw: String
 
-        /// Animation frame (1 or 2) for sprite animation.
-        var frame: Int
-
         /// Convenience initializer from typed values.
-        init(steps: Int, state: AvatarState, gender: Gender, frame: Int = 1) {
+        init(steps: Int, state: AvatarState, gender: Gender) {
             self.steps = steps
             self.stateRaw = state.rawValue
             self.genderRaw = gender.rawValue
-            self.frame = frame
         }
 
         /// Convenience accessor for state enum.

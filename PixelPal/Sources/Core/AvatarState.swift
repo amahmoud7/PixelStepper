@@ -38,9 +38,9 @@ struct AvatarLogic {
     /// - Returns: Calculated AvatarState.
     static func determineState(steps: Int) -> AvatarState {
         switch steps {
-        case 0..<2000:
+        case 0..<2500:
             return .low
-        case 2000..<7500:
+        case 2500..<7500:
             return .neutral
         default:
             return .vital

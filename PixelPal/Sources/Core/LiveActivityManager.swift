@@ -10,17 +10,6 @@ class LiveActivityManager: ObservableObject {
     /// The current Live Activity instance.
     private var currentActivity: Activity<PixelPalAttributes>?
 
-    /// Timer for animation frame updates.
-    private var animationTimer: Timer?
-
-    /// Current animation frame (1 or 2).
-    private var currentFrame: Int = 1
-
-    /// Cached state for animation updates.
-    private var cachedSteps: Int = 0
-    private var cachedState: AvatarState = .neutral
-    private var cachedGender: Gender = .male
-
     init() {
         // Check for any existing activities on launch
         checkForExistingActivity()
@@ -51,18 +40,11 @@ class LiveActivityManager: ObservableObject {
             endActivity()
         }
 
-        // Cache the state for animation updates
-        cachedSteps = steps
-        cachedState = state
-        cachedGender = gender
-        currentFrame = 1
-
         let attributes = PixelPalAttributes()
         let contentState = PixelPalAttributes.ContentState(
             steps: steps,
             state: state,
-            gender: gender,
-            frame: currentFrame
+            gender: gender
         )
 
         do {
@@ -74,47 +56,8 @@ class LiveActivityManager: ObservableObject {
             self.currentActivity = activity
             self.isActive = true
             print("Started Live Activity: \(activity.id)")
-
-            // Start animation timer
-            startAnimationTimer()
         } catch {
             print("Failed to start Live Activity: \(error)")
-        }
-    }
-
-    /// Starts a timer to toggle animation frames.
-    private func startAnimationTimer() {
-        stopAnimationTimer()
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.toggleFrame()
-            }
-        }
-    }
-
-    /// Stops the animation timer.
-    private func stopAnimationTimer() {
-        animationTimer?.invalidate()
-        animationTimer = nil
-    }
-
-    /// Toggles the animation frame and updates the activity.
-    private func toggleFrame() {
-        guard let activity = currentActivity else { return }
-
-        currentFrame = currentFrame == 1 ? 2 : 1
-
-        let contentState = PixelPalAttributes.ContentState(
-            steps: cachedSteps,
-            state: cachedState,
-            gender: cachedGender,
-            frame: currentFrame
-        )
-
-        Task {
-            await activity.update(
-                ActivityContent(state: contentState, staleDate: nil)
-            )
         }
     }
 
@@ -130,16 +73,10 @@ class LiveActivityManager: ObservableObject {
             return
         }
 
-        // Update cached state
-        cachedSteps = steps
-        cachedState = state
-        cachedGender = gender
-
         let contentState = PixelPalAttributes.ContentState(
             steps: steps,
             state: state,
-            gender: gender,
-            frame: currentFrame
+            gender: gender
         )
 
         Task {
@@ -151,7 +88,6 @@ class LiveActivityManager: ObservableObject {
 
     /// Ends the current Live Activity.
     func endActivity() {
-        stopAnimationTimer()
         guard let activity = currentActivity else { return }
 
         Task {

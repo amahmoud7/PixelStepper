@@ -47,7 +47,7 @@ private struct LockScreenView: View {
         let spriteName = SpriteAssets.spriteName(
             genderRaw: context.state.genderRaw,
             stateRaw: context.state.stateRaw,
-            frame: context.state.frame
+            frame: 1
         )
 
         HStack(spacing: 16) {
@@ -56,11 +56,6 @@ private struct LockScreenView: View {
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 50, height: 50)
-            } else {
-                // Fallback colored square if image not found
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.blue)
                     .frame(width: 50, height: 50)
             }
 
@@ -90,7 +85,7 @@ private struct ExpandedLeadingView: View {
         let spriteName = SpriteAssets.spriteName(
             genderRaw: context.state.genderRaw,
             stateRaw: context.state.stateRaw,
-            frame: context.state.frame
+            frame: 1
         )
 
         if let uiImage = UIImage(named: spriteName) {
@@ -147,7 +142,7 @@ private struct CompactLeadingView: View {
         let spriteName = SpriteAssets.spriteName(
             genderRaw: context.state.genderRaw,
             stateRaw: context.state.stateRaw,
-            frame: context.state.frame
+            frame: 1
         )
 
         if let uiImage = UIImage(named: spriteName) {
@@ -179,7 +174,7 @@ private struct MinimalView: View {
         let spriteName = SpriteAssets.spriteName(
             genderRaw: context.state.genderRaw,
             stateRaw: context.state.stateRaw,
-            frame: context.state.frame
+            frame: 1
         )
 
         if let uiImage = UIImage(named: spriteName) {

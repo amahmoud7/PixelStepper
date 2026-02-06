@@ -75,3 +75,25 @@ All sprites share the same base skeleton/proportions; gender differs only by hai
 - Any analytics dashboard or feature creep
 
 When uncertain, pick the simplest, most reviewer-proof approach.
+
+## Build & Development Commands
+
+```bash
+# Regenerate Xcode project (REQUIRED after adding/removing files)
+xcodegen generate
+
+# Build (no code signing for CI/automation)
+xcodebuild -project PixelPal.xcodeproj -scheme PixelPal -destination 'generic/platform=iOS' build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+# Run tests
+xcodebuild test -project PixelPal.xcodeproj -scheme PixelPal -destination 'platform=iOS Simulator,name=iPhone 16'
+```
+
+## File Organization
+- **App sources:** `PixelPal/Sources/` (recursive — XcodeGen auto-includes)
+- **Widget sources:** Explicit paths in `project.yml` (NOT recursive)
+- **Shared files:** `AvatarState.swift`, `SharedData.swift`, `SpriteAssets.swift`, `PixelPalAttributes.swift`
+- **Project config:** `project.yml` (XcodeGen spec)
+- **Agents:** `agents/` (specialized analysis agents with coordinator)
+
+When adding new files: create on disk in `PixelPal/Sources/`, then run `xcodegen generate` to sync the Xcode project.

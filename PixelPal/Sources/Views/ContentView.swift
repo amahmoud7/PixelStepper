@@ -64,6 +64,9 @@ struct ContentView: View {
                 fetchCumulativeSteps()
             }
         }
+        .onChange(of: healthManager.dailyStepsLast7Days) { dailyMap in
+            backfillWeeklyHistory(from: dailyMap)
+        }
         .sheet(isPresented: $showPaywall) {
             PaywallView(storeManager: storeManager, gender: gender)
         }
@@ -306,6 +309,42 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    /// Backfills HistoryManager with per-day HealthKit data for the last 7 days,
+    /// then recalculates weeklySteps and checks phase graduation.
+    private func backfillWeeklyHistory(from dailyMap: [Date: Int]) {
+        guard !dailyMap.isEmpty else { return }
+
+        let historyManager = HistoryManager.shared
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+
+        for dayOffset in (-6)...0 {
+            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: startOfToday) else { continue }
+            let dayStart = calendar.startOfDay(for: date)
+
+            if let steps = dailyMap[dayStart], steps > 0 {
+                if dayOffset < 0 {
+                    // Backfill past days with real HealthKit data
+                    historyManager.recordDay(date: dayStart, steps: steps)
+                } else {
+                    // For today: only update if HealthKit has more steps than current live value
+                    let currentTodaySteps = Int(healthManager.currentSteps)
+                    if steps > currentTodaySteps {
+                        historyManager.updateToday(steps: steps)
+                    }
+                }
+            }
+        }
+
+        // Recalculate weekly total from backfilled history
+        let weekDays = historyManager.last7Days()
+        let weekStepArray = weekDays.map { $0.steps }
+        SharedData.saveWeekData(weekStepArray)
+        weeklySteps = weekStepArray.reduce(0, +)
+
+        checkPhaseGraduation()
     }
 
     private func updateState() {

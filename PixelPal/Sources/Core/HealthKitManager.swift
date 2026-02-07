@@ -7,8 +7,8 @@ class HealthKitManager: ObservableObject {
     /// Today's step count (for display).
     @Published var currentSteps: Double = 0
 
-    /// 7-day average steps (for baseline reference).
-    @Published var baselineSteps: Double = 0
+    /// Per-day step counts for the last 7 days, keyed by start-of-day Date.
+    @Published var dailyStepsLast7Days: [Date: Int] = [:]
 
     /// Cumulative steps since user profile creation.
     @Published var cumulativeSteps: Int = 0
@@ -48,14 +48,14 @@ class HealthKitManager: ObservableObject {
 
     func fetchData() {
         fetchTodaySteps()
-        fetchBaselineSteps()
+        fetchDailyStepsLast7Days()
     }
 
     /// Fetches all data including cumulative steps since baseline.
     /// - Parameter baselineDate: The date to start cumulative counting from.
     func fetchAllData(since baselineDate: Date) {
         fetchTodaySteps()
-        fetchBaselineSteps()
+        fetchDailyStepsLast7Days()
         fetchCumulativeSteps(since: baselineDate)
     }
 
@@ -77,22 +77,52 @@ class HealthKitManager: ObservableObject {
         healthStore.execute(query)
     }
 
-    private func fetchBaselineSteps() {
+    /// Fetches per-day step totals for the last 7 days using HKStatisticsCollectionQuery.
+    private func fetchDailyStepsLast7Days() {
         let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+        let calendar = Calendar.current
         let now = Date()
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
+        let startOfToday = calendar.startOfDay(for: now)
+        guard let sevenDaysAgo = calendar.date(byAdding: .day, value: -6, to: startOfToday) else { return }
 
-        let predicate = HKQuery.predicateForSamples(withStart: sevenDaysAgo, end: now, options: .strictStartDate)
+        let daily = DateComponents(day: 1)
+        let predicate = HKQuery.predicateForSamples(
+            withStart: sevenDaysAgo,
+            end: now,
+            options: .strictStartDate
+        )
 
-        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-            guard let result = result, let sum = result.sumQuantity() else {
+        let query = HKStatisticsCollectionQuery(
+            quantityType: stepType,
+            quantitySamplePredicate: predicate,
+            options: .cumulativeSum,
+            anchorDate: sevenDaysAgo,
+            intervalComponents: daily
+        )
+
+        query.initialResultsHandler = { [weak self] _, results, error in
+            guard let self = self else { return }
+
+            if let error = error {
+                print("HealthKitManager: Failed to fetch daily steps: \(error)")
                 return
             }
-            let totalSteps = sum.doubleValue(for: HKUnit.count())
+
+            guard let results = results else { return }
+
+            var dailyMap: [Date: Int] = [:]
+
+            results.enumerateStatistics(from: sevenDaysAgo, to: now) { statistics, _ in
+                let day = calendar.startOfDay(for: statistics.startDate)
+                let steps = statistics.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
+                dailyMap[day] = Int(steps)
+            }
+
             DispatchQueue.main.async {
-                self.baselineSteps = totalSteps / 7.0
+                self.dailyStepsLast7Days = dailyMap
             }
         }
+
         healthStore.execute(query)
     }
 

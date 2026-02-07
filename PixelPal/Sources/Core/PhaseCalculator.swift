@@ -1,12 +1,13 @@
 import Foundation
 
-/// Calculates evolution phase based on cumulative steps.
-/// Evolution is permanent - phases never reset or reverse.
+/// Calculates evolution phase based on weekly rolling step totals.
+/// Phase graduation is permanent — once you hit the weekly target, you advance.
+/// Each week the progress gauge resets, showing progress toward the NEXT phase.
 struct PhaseCalculator {
-    /// Phase thresholds (cumulative steps).
-    static let phase1Max = 25_000
-    static let phase2Max = 75_000
-    static let phase3Max = 200_000
+    /// Weekly step thresholds to graduate to next phase.
+    static let phase1Max = 25_000    // ~3,571/day to reach Phase 2
+    static let phase2Max = 50_000    // ~7,143/day to reach Phase 3
+    static let phase3Max = 75_000    // ~10,714/day to reach Phase 4
 
     // Threshold aliases for ContentView compatibility
     static let phase2Threshold = phase1Max
@@ -39,18 +40,18 @@ struct PhaseCalculator {
         4: "You've changed."
     ]
 
-    /// Calculates the current phase based on total steps and premium status.
+    /// Calculates the phase a user would earn based on weekly steps.
     /// - Parameters:
-    ///   - totalSteps: Cumulative steps since app creation.
+    ///   - totalSteps: Weekly rolling step total (last 7 days).
     ///   - isPremium: Whether the user has premium subscription.
     /// - Returns: Phase number (1-4). Non-premium users are capped at Phase 2.
     static func currentPhase(totalSteps: Int, isPremium: Bool) -> Int {
         switch totalSteps {
-        case 0...phase1Max:
+        case 0..<phase1Max:
             return 1
-        case (phase1Max + 1)...phase2Max:
+        case phase1Max..<phase2Max:
             return 2
-        case (phase2Max + 1)...phase3Max:
+        case phase2Max..<phase3Max:
             return isPremium ? 3 : 2
         default:
             return isPremium ? 4 : 2
@@ -83,47 +84,26 @@ struct PhaseCalculator {
         }
     }
 
-    /// Returns progress percentage within current phase.
-    /// - Parameter totalSteps: Cumulative steps since app creation.
+    /// Returns weekly progress toward the next phase threshold.
+    /// - Parameters:
+    ///   - weeklySteps: Rolling 7-day step total.
+    ///   - currentPhase: User's current permanent phase.
     /// - Returns: Progress percentage (0.0 to 1.0).
-    static func progressInPhase(totalSteps: Int) -> Double {
-        let earned = earnedPhase(totalSteps: totalSteps)
-
-        switch earned {
-        case 1:
-            return Double(totalSteps) / Double(phase1Max)
-        case 2:
-            let stepsInPhase = totalSteps - phase1Max
-            let phaseSize = phase2Max - phase1Max
-            return Double(stepsInPhase) / Double(phaseSize)
-        case 3:
-            let stepsInPhase = totalSteps - phase2Max
-            let phaseSize = phase3Max - phase2Max
-            return Double(stepsInPhase) / Double(phaseSize)
-        default:
-            // Phase 4 has no upper limit, show progress toward next 100k
-            let stepsInPhase = totalSteps - phase3Max
-            let milestone = 100_000
-            return Double(stepsInPhase % milestone) / Double(milestone)
-        }
+    static func weeklyProgress(weeklySteps: Int, currentPhase: Int) -> Double {
+        let threshold = nextThreshold(for: currentPhase)
+        guard threshold > 0 else { return 1.0 }
+        return min(1.0, Double(weeklySteps) / Double(threshold))
     }
 
-    /// Returns steps needed to reach next phase.
-    /// - Parameter totalSteps: Cumulative steps since app creation.
-    /// - Returns: Steps remaining to next phase, or nil if at Phase 4.
-    static func stepsToNextPhase(totalSteps: Int) -> Int? {
-        let earned = earnedPhase(totalSteps: totalSteps)
-
-        switch earned {
-        case 1:
-            return phase1Max - totalSteps + 1
-        case 2:
-            return phase2Max - totalSteps + 1
-        case 3:
-            return phase3Max - totalSteps + 1
-        default:
-            return nil // Phase 4 is the final phase
-        }
+    /// Returns steps needed this week to reach next phase.
+    /// - Parameters:
+    ///   - weeklySteps: Rolling 7-day step total.
+    ///   - currentPhase: User's current permanent phase.
+    /// - Returns: Steps remaining, or nil if at Phase 4.
+    static func stepsToNextPhase(weeklySteps: Int, currentPhase: Int) -> Int? {
+        guard currentPhase < 4 else { return nil }
+        let threshold = nextThreshold(for: currentPhase)
+        return max(0, threshold - weeklySteps)
     }
 
     /// Checks if a phase transition just occurred.

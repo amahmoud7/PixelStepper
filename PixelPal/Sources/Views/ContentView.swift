@@ -12,9 +12,9 @@ struct ContentView: View {
     // Phase tracking
     @State private var currentPhase: Int = 1
     @State private var cumulativeSteps: Int = 0
+    @State private var weeklySteps: Int = 0
     @State private var previousPhase: Int = 1
 
-    /// Whether onboarding is complete (UserProfile exists + HealthKit authorized).
     private var isOnboardingComplete: Bool {
         let profile = PersistenceManager.shared.userProfile
         return profile != nil && healthManager.isAuthorized
@@ -22,7 +22,17 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
+            // Ambient gradient background
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.04, green: 0.04, blue: 0.12),
+                    Color(red: 0.1, green: 0.04, blue: 0.18),
+                    Color(red: 0.04, green: 0.1, blue: 0.12)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             if !isOnboardingComplete {
                 OnboardingView()
@@ -36,20 +46,26 @@ struct ContentView: View {
                 healthManager.fetchData()
                 fetchCumulativeSteps()
             }
+            // Defer StoreKit product loading to after launch
+            Task {
+                await storeManager.setup()
+            }
         }
         .onChange(of: healthManager.currentSteps) { _ in
             updateState()
         }
-        .onChange(of: healthManager.cumulativeSteps) { newCumulative in
-            updatePhase(cumulativeSteps: newCumulative)
+        .onChange(of: healthManager.cumulativeSteps) { _ in
+            checkPhaseGraduation()
         }
         .onChange(of: healthManager.isAuthorized) { authorized in
             if authorized {
-                // Reload saved data (including gender) after onboarding completes
                 loadSavedData()
                 healthManager.fetchData()
                 fetchCumulativeSteps()
             }
+        }
+        .onChange(of: healthManager.dailyStepsLast7Days) { dailyMap in
+            backfillWeeklyHistory(from: dailyMap)
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView(storeManager: storeManager, gender: gender)
@@ -59,83 +75,110 @@ struct ContentView: View {
     // MARK: - Main Content
 
     private var mainContentView: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ScrollView {
+            VStack(spacing: 24) {
+                // Top bar: Phase name + Crown button
+                topBar
+                    .padding(.top, 8)
 
-            // Phase indicator
-            PhaseDisplayView(phase: currentPhase, isPremium: storeManager.isPremium)
+                // Hero avatar
+                AvatarView(
+                    state: avatarState,
+                    gender: gender,
+                    phase: currentPhase
+                )
 
-            // Avatar
-            AvatarView(state: avatarState, gender: gender)
+                // Stats glass card
+                statsCard
 
-            // State & Steps
-            VStack(spacing: 8) {
-                Text(avatarState.description)
-                    .font(.headline)
-                    .foregroundColor(.white.opacity(0.8))
+                // Week memory
+                WeekMemorySection()
+                    .padding(.horizontal, 20)
 
-                Text("\(Int(healthManager.currentSteps)) steps today")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-
-                // Cumulative steps (evolution progress)
-                Text("\(cumulativeSteps.formatted()) total steps")
-                    .font(.caption)
-                    .foregroundColor(phaseColor.opacity(0.8))
-
-                // Phase progress
+                // Phase progress (weekly steps toward next phase)
                 PhaseProgressView(
-                    currentSteps: cumulativeSteps,
+                    weeklySteps: weeklySteps,
                     currentPhase: currentPhase,
                     isPremium: storeManager.isPremium
                 )
-                .padding(.top, 8)
+                .glassCard()
+                .padding(.horizontal, 20)
+
+                // Live Activity controls
+                liveActivityCard
 
                 if let lastUpdate = SharedData.loadLastUpdateDate() {
                     Text("Updated \(lastUpdate.formatted(date: .omitted, time: .shortened))")
                         .font(.caption2)
                         .foregroundColor(.gray.opacity(0.6))
                 }
+
+                Spacer().frame(height: 20)
             }
+        }
+        .refreshable {
+            healthManager.fetchData()
+            fetchCumulativeSteps()
+            updateState()
+        }
+    }
+
+    // MARK: - Top Bar
+
+    private var topBar: some View {
+        HStack {
+            PhaseDisplayView(phase: currentPhase, isPremium: storeManager.isPremium)
 
             Spacer()
 
-            // Live Activity Controls
-            liveActivityControls
-
-            // Refresh Button
-            Button(action: {
-                healthManager.fetchData()
-                fetchCumulativeSteps()
-                updateState()
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise")
-                    Text("Refresh")
+            // Crown button for non-premium users (paywall re-entry)
+            if !storeManager.isPremium {
+                Button(action: { showPaywall = true }) {
+                    Image(systemName: "crown.fill")
+                        .font(.title3)
+                        .foregroundColor(.yellow.opacity(0.8))
+                        .padding(8)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Circle())
                 }
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.5))
-                .padding(.vertical, 8)
             }
-            .padding(.bottom, 20)
         }
+        .padding(.horizontal, 20)
     }
 
-    // MARK: - Phase Color
+    // MARK: - Stats Card
 
-    private var phaseColor: Color {
-        switch currentPhase {
-        case 1: return .gray
-        case 2: return .blue
-        case 3: return .purple
-        case 4: return .orange
-        default: return .gray
+    private var statsCard: some View {
+        VStack(spacing: 10) {
+            Text("\(Int(healthManager.currentSteps))")
+                .font(.system(size: 48, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .monospacedDigit()
+
+            Text("steps today")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+
+            Text(avatarState.description)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(phaseColor.opacity(0.9))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(phaseColor.opacity(0.15))
+                .clipShape(Capsule())
+
+            Text("\(weeklySteps.formatted()) steps this week")
+                .font(.caption)
+                .foregroundColor(phaseColor.opacity(0.7))
         }
+        .glassCard()
+        .padding(.horizontal, 20)
     }
 
-    // MARK: - Live Activity Controls
+    // MARK: - Live Activity Card
 
-    private var liveActivityControls: some View {
+    private var liveActivityCard: some View {
         VStack(spacing: 12) {
             if liveActivityManager.isActive {
                 Button(action: {
@@ -149,10 +192,9 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.red.opacity(0.8))
-                    .cornerRadius(12)
+                    .background(Color.red.opacity(0.7))
+                    .cornerRadius(16)
                 }
-                .padding(.horizontal, 40)
 
                 Text("Live Activity is running")
                     .font(.caption)
@@ -174,35 +216,56 @@ struct ContentView: View {
                     .foregroundColor(.black)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.white)
-                    .cornerRadius(12)
+                    .background(
+                        LinearGradient(
+                            colors: [.white, Color(white: 0.9)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(16)
+                    .shadow(color: .white.opacity(0.15), radius: 8, y: 2)
                 }
-                .padding(.horizontal, 40)
 
-                Text("Show on Lock Screen & Dynamic Island")
+                Text("Start Pixel Pace then swipe up to view the Dynamic Island")
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.gray.opacity(0.8))
+                    .multilineTextAlignment(.center)
             }
+        }
+        .glassCard()
+        .padding(.horizontal, 20)
+    }
 
+    // MARK: - Phase Color
+
+    private var phaseColor: Color {
+        switch currentPhase {
+        case 1: return .gray
+        case 2: return .blue
+        case 3: return .purple
+        case 4: return .orange
+        default: return .gray
         }
     }
 
     // MARK: - State Management
 
     private func loadSavedData() {
-        // Load gender from UserProfile
         if let profile = PersistenceManager.shared.userProfile {
             gender = profile.selectedGender
         } else if let savedGender = SharedData.loadGender() {
-            // Fallback to legacy SharedData
             gender = savedGender
         }
 
-        // Load progress state
         let progress = PersistenceManager.shared.progressState
         currentPhase = progress.currentPhase
         previousPhase = progress.currentPhase
         cumulativeSteps = progress.totalStepsSinceStart
+
+        // Compute weekly total from saved week data
+        let weekData = SharedData.loadWeekData()
+        weeklySteps = weekData.reduce(0, +)
 
         avatarState = SharedData.loadState()
     }
@@ -214,32 +277,29 @@ struct ContentView: View {
             await healthManager.fetchCumulativeStepsAsync(since: profile.createdAt)
             await MainActor.run {
                 cumulativeSteps = healthManager.cumulativeSteps
-                updatePhase(cumulativeSteps: cumulativeSteps)
+                checkPhaseGraduation()
             }
         }
     }
 
-    private func updatePhase(cumulativeSteps: Int) {
-        self.cumulativeSteps = cumulativeSteps
-
+    /// Check if weekly steps qualify for phase graduation.
+    private func checkPhaseGraduation() {
         let entitlements = PersistenceManager.shared.entitlements
-        let newPhase = PhaseCalculator.currentPhase(
-            totalSteps: cumulativeSteps,
+        let phaseFromWeekly = PhaseCalculator.currentPhase(
+            totalSteps: weeklySteps,
             isPremium: entitlements.isPremium
         )
 
-        // Check for phase up (evolution)
-        if newPhase > currentPhase {
-            currentPhase = newPhase
+        // Only advance, never demote
+        if phaseFromWeekly > currentPhase {
+            currentPhase = phaseFromWeekly
 
-            // Save progress
             PersistenceManager.shared.updateProgress { progress in
                 progress.totalStepsSinceStart = cumulativeSteps
-                progress.currentPhase = newPhase
+                progress.currentPhase = phaseFromWeekly
             }
 
-            // Check if we should show paywall (Phase 2 reached, not premium, not seen before)
-            if newPhase == 2 && !entitlements.isPremium {
+            if phaseFromWeekly == 2 && !entitlements.isPremium {
                 let progress = PersistenceManager.shared.progressState
                 if !progress.hasSeenPaywall {
                     showPaywall = true
@@ -248,25 +308,68 @@ struct ContentView: View {
                     }
                 }
             }
-        } else {
-            currentPhase = newPhase
         }
+    }
+
+    /// Backfills HistoryManager with per-day HealthKit data for the last 7 days,
+    /// then recalculates weeklySteps and checks phase graduation.
+    private func backfillWeeklyHistory(from dailyMap: [Date: Int]) {
+        guard !dailyMap.isEmpty else { return }
+
+        let historyManager = HistoryManager.shared
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+
+        for dayOffset in (-6)...0 {
+            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: startOfToday) else { continue }
+            let dayStart = calendar.startOfDay(for: date)
+
+            if let steps = dailyMap[dayStart], steps > 0 {
+                if dayOffset < 0 {
+                    // Backfill past days with real HealthKit data
+                    historyManager.recordDay(date: dayStart, steps: steps)
+                } else {
+                    // For today: only update if HealthKit has more steps than current live value
+                    let currentTodaySteps = Int(healthManager.currentSteps)
+                    if steps > currentTodaySteps {
+                        historyManager.updateToday(steps: steps)
+                    }
+                }
+            }
+        }
+
+        // Recalculate weekly total from backfilled history
+        let weekDays = historyManager.last7Days()
+        let weekStepArray = weekDays.map { $0.steps }
+        SharedData.saveWeekData(weekStepArray)
+        weeklySteps = weekStepArray.reduce(0, +)
+
+        checkPhaseGraduation()
     }
 
     private func updateState() {
         let newState = AvatarLogic.determineState(steps: healthManager.currentSteps)
         self.avatarState = newState
 
-        // Save to shared container for Widget
         SharedData.saveState(state: newState, steps: healthManager.currentSteps, phase: currentPhase)
+        SharedData.saveCumulativeSteps(cumulativeSteps)
 
-        // Update progress with today's steps
+        // Save week data for widgets
+        let historyManager = HistoryManager.shared
+        historyManager.updateToday(steps: Int(healthManager.currentSteps))
+        let weekDays = historyManager.last7Days()
+        let weekStepArray = weekDays.map { $0.steps }
+        SharedData.saveWeekData(weekStepArray)
+
+        // Update weekly total and check for phase graduation
+        weeklySteps = weekStepArray.reduce(0, +)
+        checkPhaseGraduation()
+
         PersistenceManager.shared.updateProgress { progress in
             progress.todaySteps = Int(healthManager.currentSteps)
             progress.totalStepsSinceStart = cumulativeSteps
         }
 
-        // Update Live Activity if active
         if liveActivityManager.isActive {
             liveActivityManager.updateActivity(
                 steps: Int(healthManager.currentSteps),
@@ -276,6 +379,29 @@ struct ContentView: View {
                 cumulativeSteps: cumulativeSteps
             )
         }
+    }
+}
+
+// MARK: - Glass Card Modifier
+
+private struct GlassCardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial.opacity(0.6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+    }
+}
+
+extension View {
+    func glassCard() -> some View {
+        modifier(GlassCardModifier())
     }
 }
 
@@ -345,7 +471,7 @@ private struct PhaseDisplayView: View {
 // MARK: - Phase Progress View
 
 private struct PhaseProgressView: View {
-    let currentSteps: Int
+    let weeklySteps: Int
     let currentPhase: Int
     let isPremium: Bool
 
@@ -353,54 +479,36 @@ private struct PhaseProgressView: View {
         PhaseCalculator.nextThreshold(for: currentPhase)
     }
 
-    private var currentThreshold: Int {
-        switch currentPhase {
-        case 1: return 0
-        case 2: return PhaseCalculator.phase2Threshold
-        case 3: return PhaseCalculator.phase3Threshold
-        case 4: return PhaseCalculator.phase4Threshold
-        default: return 0
-        }
-    }
-
     private var progress: Double {
-        guard nextThreshold > currentThreshold else { return 1.0 }
-        let stepsInPhase = currentSteps - currentThreshold
-        let phaseRange = nextThreshold - currentThreshold
-        return min(1.0, Double(stepsInPhase) / Double(phaseRange))
+        PhaseCalculator.weeklyProgress(weeklySteps: weeklySteps, currentPhase: currentPhase)
     }
 
     private var stepsToNext: Int {
-        max(0, nextThreshold - currentSteps)
+        PhaseCalculator.stepsToNextPhase(weeklySteps: weeklySteps, currentPhase: currentPhase) ?? 0
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            // Progress bar
+        VStack(spacing: 8) {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // Background
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.white.opacity(0.1))
                         .frame(height: 8)
 
-                    // Progress
                     RoundedRectangle(cornerRadius: 4)
                         .fill(progressColor)
                         .frame(width: geometry.size.width * progress, height: 8)
                 }
             }
             .frame(height: 8)
-            .padding(.horizontal, 40)
 
-            // Progress text
             if currentPhase < 4 {
                 if currentPhase >= 2 && !isPremium {
                     Text("Unlock Premium for Phase \(currentPhase + 1)")
                         .font(.caption2)
                         .foregroundColor(.purple.opacity(0.8))
                 } else {
-                    Text("\(stepsToNext.formatted()) steps to Phase \(currentPhase + 1)")
+                    Text("\(weeklySteps.formatted()) / \(nextThreshold.formatted()) this week")
                         .font(.caption2)
                         .foregroundColor(.gray.opacity(0.8))
                 }

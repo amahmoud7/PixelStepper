@@ -32,14 +32,16 @@ class StoreManager: ObservableObject {
     private var updateListenerTask: Task<Void, Error>?
 
     private init() {
-        // Start listening for transactions
+        // Start listening for transactions (lightweight, non-blocking)
         updateListenerTask = listenForTransactions()
+        // Products loaded on demand via setup() to avoid blocking app launch
+    }
 
-        // Load products and check entitlements
-        Task {
-            await loadProducts()
-            await updatePurchasedProducts()
-        }
+    /// Call after app launch to load products and check entitlements.
+    func setup() async {
+        guard products.isEmpty else { return }
+        await loadProducts()
+        await updatePurchasedProducts()
     }
 
     deinit {

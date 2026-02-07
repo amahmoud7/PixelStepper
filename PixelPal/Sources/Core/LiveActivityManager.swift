@@ -16,12 +16,6 @@ class LiveActivityManager: ObservableObject {
     /// Previous cumulative steps for milestone detection.
     private var previousCumulativeSteps: Int = 0
 
-    /// Current walking animation frame (1-32).
-    private var currentWalkingFrame: Int = 1
-
-    /// Timer for walking animation updates.
-    private var walkingTimer: Timer?
-
     /// Timer for clearing milestone celebration.
     private var milestoneTimer: Timer?
 
@@ -41,8 +35,10 @@ class LiveActivityManager: ObservableObject {
     private var currentMilestone: String?
 
     init() {
-        // Check for any existing activities on launch
-        checkForExistingActivity()
+        // Defer activity check to avoid blocking app launch
+        Task { @MainActor [weak self] in
+            self?.checkForExistingActivity()
+        }
     }
 
     /// Checks if there's an existing Live Activity and restores reference to it.
@@ -83,7 +79,7 @@ class LiveActivityManager: ObservableObject {
             walkingFrame: 1,
             currentPhase: phase,
             milestoneText: nil,
-            showStepCount: false  // Idle state: no step count per UI rules
+            showStepCount: false
         )
 
         do {
@@ -191,10 +187,10 @@ class LiveActivityManager: ObservableObject {
             state: currentState,
             gender: currentGender,
             isWalking: isWalking,
-            walkingFrame: currentWalkingFrame,
+            walkingFrame: 1,
             currentPhase: currentPhase,
             milestoneText: milestoneText,
-            showStepCount: true  // Always show during milestone
+            showStepCount: true
         )
 
         Task {
@@ -217,10 +213,10 @@ class LiveActivityManager: ObservableObject {
             state: currentState,
             gender: currentGender,
             isWalking: isWalking,
-            walkingFrame: currentWalkingFrame,
+            walkingFrame: 1,
             currentPhase: currentPhase,
             milestoneText: nil,
-            showStepCount: isWalking  // Only show if still walking
+            showStepCount: isWalking
         )
 
         Task {
@@ -230,31 +226,10 @@ class LiveActivityManager: ObservableObject {
         }
     }
 
-    /// Starts the walking animation timer.
+    /// Starts walking state — sends ONE update, animation handled locally by TimelineView in widget.
     private func startWalkingAnimation(steps: Int) {
         isWalking = true
-        currentWalkingFrame = 1
 
-        // Update immediately with walking state
-        updateWalkingFrame(steps: steps)
-
-        // Start timer to cycle through frames at 24fps (42ms per frame)
-        walkingTimer?.invalidate()
-        walkingTimer = Timer.scheduledTimer(withTimeInterval: 0.042, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.advanceWalkingFrame(steps: steps)
-            }
-        }
-    }
-
-    /// Advances to the next walking frame.
-    private func advanceWalkingFrame(steps: Int) {
-        currentWalkingFrame = (currentWalkingFrame % 32) + 1
-        updateWalkingFrame(steps: steps)
-    }
-
-    /// Updates the Live Activity with current walking frame.
-    private func updateWalkingFrame(steps: Int) {
         guard let activity = currentActivity else { return }
 
         let contentState = PixelPalAttributes.ContentState(
@@ -262,10 +237,10 @@ class LiveActivityManager: ObservableObject {
             state: currentState,
             gender: currentGender,
             isWalking: true,
-            walkingFrame: currentWalkingFrame,
+            walkingFrame: 1,
             currentPhase: currentPhase,
             milestoneText: currentMilestone,
-            showStepCount: true  // Show step count during walking per UI rules
+            showStepCount: true
         )
 
         Task {
@@ -275,10 +250,8 @@ class LiveActivityManager: ObservableObject {
         }
     }
 
-    /// Stops the walking animation.
+    /// Stops walking state — sends ONE update to return to idle.
     private func stopWalkingAnimation(steps: Int) {
-        walkingTimer?.invalidate()
-        walkingTimer = nil
         isWalking = false
 
         guard let activity = currentActivity else { return }
@@ -291,7 +264,7 @@ class LiveActivityManager: ObservableObject {
             walkingFrame: 1,
             currentPhase: currentPhase,
             milestoneText: currentMilestone,
-            showStepCount: currentMilestone != nil  // Only show if celebrating milestone
+            showStepCount: currentMilestone != nil
         )
 
         Task {
@@ -303,9 +276,6 @@ class LiveActivityManager: ObservableObject {
 
     /// Ends the current Live Activity.
     func endActivity() {
-        // Stop walking animation timer
-        walkingTimer?.invalidate()
-        walkingTimer = nil
         isWalking = false
 
         // Stop milestone timer

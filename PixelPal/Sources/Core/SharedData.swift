@@ -63,6 +63,30 @@ struct SharedData {
         return defaults.object(forKey: Keys.lastUpdateDate) as? Date
     }
 
+    // MARK: - Cumulative Steps
+
+    static func saveCumulativeSteps(_ steps: Int) {
+        guard let defaults = userDefaults else { return }
+        defaults.set(steps, forKey: "cumulativeSteps")
+    }
+
+    static func loadCumulativeSteps() -> Int {
+        guard let defaults = userDefaults else { return 0 }
+        return defaults.integer(forKey: "cumulativeSteps")
+    }
+
+    // MARK: - Week Data (last 7 days step counts)
+
+    static func saveWeekData(_ data: [Int]) {
+        guard let defaults = userDefaults else { return }
+        defaults.set(data, forKey: "weekStepData")
+    }
+
+    static func loadWeekData() -> [Int] {
+        guard let defaults = userDefaults else { return [] }
+        return defaults.array(forKey: "weekStepData") as? [Int] ?? []
+    }
+
     // MARK: - Gender
 
     static func saveGender(_ gender: Gender) {

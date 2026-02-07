@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Pace - Dynamic Island & Widget Design Selector</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a14;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    padding: 40px 20px;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+
+  .section {
+    margin-bottom: 64px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .section-header h2 {
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  .section-desc {
+    color: #777;
+    font-size: 13px;
+    margin-bottom: 28px;
+  }
+
+  .options-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  @media (max-width: 900px) {
+    .options-grid { grid-template-columns: 1fr; }
+  }
+
+  .option-card {
+    background: #111122;
+    border: 2px solid #222;
+    border-radius: 20px;
+    padding: 28px 24px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .option-card:hover {
+    border-color: #444;
+    transform: translateY(-2px);
+  }
+
+  .option-card.selected {
+    border-color: #a78bfa;
+    background: #16142a;
+    box-shadow: 0 0 24px rgba(167, 139, 250, 0.15);
+  }
+
+  .option-card.selected::after {
+    content: '';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 24px;
+    height: 24px;
+    background: #a78bfa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  .option-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #a78bfa;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .option-name {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .option-desc {
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  .mockup-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80px;
+    margin-bottom: 16px;
+  }
+
+  /* ========== PIXEL CHARACTER ========== */
+  .pixel-char {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .pixel-sprite {
+    width: 32px; height: 32px;
+    background: #a78bfa;
+    border-radius: 4px;
+    position: relative;
+    image-rendering: pixelated;
+  }
+
+  .sprite-tiny { width: 20px; height: 20px; border-radius: 3px; }
+  .sprite-small { width: 28px; height: 28px; border-radius: 3px; }
+  .sprite-medium { width: 40px; height: 40px; border-radius: 4px; }
+  .sprite-large { width: 56px; height: 56px; border-radius: 5px; }
+  .sprite-xl { width: 72px; height: 72px; border-radius: 6px; }
+
+  /* Pixel character via CSS */
+  .pixel-character {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pixel-character canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  /* ========== DYNAMIC ISLAND MOCKUPS ========== */
+
+  /* Compact / Slim */
+  .di-compact {
+    background: #000;
+    border-radius: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    min-width: 220px;
+    height: 40px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+
+  .di-compact-leading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .di-compact-trailing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Expanded */
+  .di-expanded {
+    background: #000;
+    border-radius: 28px;
+    padding: 16px;
+    min-width: 340px;
+    max-width: 370px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  }
+
+  .di-expanded-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .di-expanded-center {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+  }
+
+  .di-expanded-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Minimal */
+  .di-minimal {
+    background: #000;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    position: relative;
+  }
+
+  /* ========== WIDGET MOCKUPS ========== */
+
+  .widget-small {
+    background: linear-gradient(135deg, #0a0a14, #1a0a28);
+    border-radius: 22px;
+    width: 170px;
+    height: 170px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+
+  .widget-medium {
+    background: linear-gradient(135deg, #0a0a14, #1a0a28);
+    border-radius: 22px;
+    width: 360px;
+    height: 170px;
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    gap: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+
+  /* ========== LOCK SCREEN MOCKUPS ========== */
+
+  .ls-circular {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  .ls-rectangular {
+    width: 180px;
+    height: 56px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  /* ========== UTILITY CLASSES ========== */
+
+  .text-xs { font-size: 10px; }
+  .text-sm { font-size: 12px; }
+  .text-md { font-size: 14px; }
+  .text-lg { font-size: 18px; }
+  .text-xl { font-size: 24px; }
+  .text-2xl { font-size: 32px; }
+  .text-bold { font-weight: 700; }
+  .text-semi { font-weight: 600; }
+  .text-medium { font-weight: 500; }
+  .text-gray { color: #888; }
+  .text-dim { color: #555; }
+  .text-green { color: #34C759; }
+  .text-blue { color: #5AC8FA; }
+  .text-purple { color: #a78bfa; }
+  .text-orange { color: #FF9F0A; }
+  .text-white { color: #fff; }
+  .text-center { text-align: center; }
+  .text-right { text-align: right; }
+  .text-rounded { font-variant-numeric: tabular-nums; }
+
+  .flex { display: flex; }
+  .flex-col { flex-direction: column; }
+  .flex-center { align-items: center; justify-content: center; }
+  .items-center { align-items: center; }
+  .items-end { align-items: flex-end; }
+  .justify-between { justify-content: space-between; }
+  .gap-2 { gap: 2px; }
+  .gap-4 { gap: 4px; }
+  .gap-6 { gap: 6px; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+
+  .w-full { width: 100%; }
+
+  /* Progress bar */
+  .progress-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-bar-lg {
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  /* State dot */
+  .state-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .dot-vital { background: #34C759; }
+  .dot-neutral { background: #5AC8FA; }
+  .dot-low { background: #FF9F0A; }
+
+  /* Phase ring */
+  .phase-ring {
+    border: 2px solid;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Glow circle */
+  .glow-circle {
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Week dots */
+  .week-dots {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .week-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  /* Mini bar chart */
+  .mini-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 16px;
+  }
+
+  .mini-bar {
+    width: 4px;
+    border-radius: 1px;
+    min-height: 2px;
+  }
+
+  /* Summary panel */
+  .summary-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #16142a;
+    border-top: 1px solid #333;
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+  }
+
+  .summary-selections {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .summary-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .summary-label {
+    color: #888;
+  }
+
+  .summary-value {
+    color: #a78bfa;
+    font-weight: 600;
+  }
+
+  .export-btn {
+    background: linear-gradient(135deg, #a78bfa, #7c3aed);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .export-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(167, 139, 250, 0.3);
+  }
+
+  .badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-purple { background: rgba(167, 139, 250, 0.2); color: #a78bfa; }
+  .badge-green { background: rgba(52, 199, 89, 0.2); color: #34C759; }
+  .badge-blue { background: rgba(90, 200, 250, 0.2); color: #5AC8FA; }
+
+  .divider {
+    height: 1px;
+    background: #222;
+    margin: 8px 0;
+  }
+
+  /* Spacer for fixed bottom panel */
+  .bottom-spacer { height: 100px; }
+
+  .pros-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 8px;
+  }
+
+  .pros-list li {
+    font-size: 11px;
+    color: #aaa;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .pros-list li::before {
+    content: '+';
+    color: #34C759;
+    font-weight: 700;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Pixel Pace Design Selector</h1>
+  <p class="subtitle">Select one design per category. Click to choose, then export your selections.</p>
+
+  <!-- ======================== COMPACT / SLIM ======================== -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Dynamic Island — Compact (Slim)</h2>
+    </div>
+    <p class="section-desc">The default pill shape at the top of the screen. Users see this 90% of the time.</p>
+
+    <div class="options-grid">
+      <!-- Option A: Minimal Zen -->
+      <div class="option-card selected" data-group="compact" data-value="A" onclick="selectOption(this)">
+        <span class="option-label">Option A</span>
+        <span class="option-name">Minimal Zen</span>
+        <span class="option-desc">Character only on left, phase icon on right. Clean, ambient — lets the character speak for itself.</span>
+        <div class="mockup-container">
+          <div class="di-compact">
+            <div class="di-compact-leading">
+              <canvas class="pixel-char" width="24" height="24" data-state="vital" data-size="24"></canvas>
+            </div>
+            <div class="di-compact-trailing">
+              <span class="state-dot dot-vital"></span>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Most unobtrusive — feels like a pet</li>
+          <li>Character state conveys info visually</li>
+          <li>Encourages tapping to expand for details</li>
+        </ul>
+      </div>
+
+      <!-- Option B: Steps Forward -->
+      <div class="option-card" data-group="compact" data-value="B" onclick="selectOption(this)">
+        <span class="option-label">Option B</span>
+        <span class="option-name">Steps Forward</span>
+        <span class="option-desc">Character on left, live step count on right. At-a-glance progress without expanding.</span>
+        <div class="mockup-container">
+          <div class="di-compact">
+            <div class="di-compact-leading">
+              <canvas class="pixel-char" width="24" height="24" data-state="vital" data-size="24"></canvas>
+            </div>
+            <div class="di-compact-trailing flex items-center gap-4">
+              <span class="text-sm text-semi text-rounded">4,832</span>
+              <span class="state-dot dot-vital"></span>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Step count always visible — motivating</li>
+          <li>Quick glance replaces opening the app</li>
+          <li>Colored dot shows energy state</li>
+        </ul>
+      </div>
+
+      <!-- Option C: Progress Pill -->
+      <div class="option-card" data-group="compact" data-value="C" onclick="selectOption(this)">
+        <span class="option-label">Option C</span>
+        <span class="option-name">Progress Pill</span>
+        <span class="option-desc">Character on left, micro progress bar on right showing daily goal completion.</span>
+        <div class="mockup-container">
+          <div class="di-compact">
+            <div class="di-compact-leading">
+              <canvas class="pixel-char" width="24" height="24" data-state="neutral" data-size="24"></canvas>
+            </div>
+            <div class="di-compact-trailing flex items-center gap-6">
+              <div style="width: 48px;">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: 64%; background: #5AC8FA;"></div>
+                </div>
+              </div>
+              <span class="text-xs text-dim">64%</span>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Goal progress always visible</li>
+          <li>Visual progress bar is instantly readable</li>
+          <li>Percentage gives precise feedback</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== EXPANDED ======================== -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Dynamic Island — Expanded</h2>
+    </div>
+    <p class="section-desc">Full expanded view when user long-presses the Dynamic Island. This is where you deliver the most value.</p>
+
+    <div class="options-grid">
+      <!-- Option A: Dashboard -->
+      <div class="option-card selected" data-group="expanded" data-value="A" onclick="selectOption(this)">
+        <span class="option-label">Option A</span>
+        <span class="option-name">Full Dashboard</span>
+        <span class="option-desc">Character with glow, steps, state, goal progress bar, and 7-day streak dots. Maximum information density.</span>
+        <div class="mockup-container">
+          <div class="di-expanded">
+            <div class="di-expanded-top">
+              <div class="flex items-center gap-8">
+                <div class="glow-circle" style="width: 52px; height: 52px; background: rgba(52,199,89,0.12);">
+                  <canvas class="pixel-char" width="44" height="44" data-state="vital" data-size="44"></canvas>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <span class="badge badge-green">Vital</span>
+                  <span class="text-xs text-dim">Phase 2 • Growing</span>
+                </div>
+              </div>
+              <div class="flex flex-col items-end gap-2">
+                <span class="text-xl text-bold text-rounded">4,832</span>
+                <span class="text-xs text-gray">steps</span>
+              </div>
+            </div>
+            <div style="padding: 0 4px;">
+              <div class="progress-bar progress-bar-lg" style="margin-bottom: 6px;">
+                <div class="progress-fill" style="width: 64%; background: linear-gradient(90deg, #34C759, #5AC8FA);"></div>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-dim">4,832 / 7,500</span>
+                <span class="text-xs text-green">2,668 to go</span>
+              </div>
+            </div>
+            <div class="divider" style="margin: 10px 0 8px;"></div>
+            <div class="flex justify-between items-center" style="padding: 0 4px;">
+              <span class="text-xs text-dim">This week</span>
+              <div class="week-dots">
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #FF3B30; opacity: 0.7;"></div>
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #FF3B30; opacity: 0.7;"></div>
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #5AC8FA; box-shadow: 0 0 4px #5AC8FA;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>All key metrics in one view</li>
+          <li>Weekly streak creates accountability</li>
+          <li>Goal progress bar is motivating</li>
+        </ul>
+      </div>
+
+      <!-- Option B: Character Stage -->
+      <div class="option-card" data-group="expanded" data-value="B" onclick="selectOption(this)">
+        <span class="option-label">Option B</span>
+        <span class="option-name">Character Stage</span>
+        <span class="option-desc">Large animated character center stage with steps and phase info flanking. The character is the hero.</span>
+        <div class="mockup-container">
+          <div class="di-expanded">
+            <div class="di-expanded-top">
+              <div class="flex flex-col gap-2">
+                <span class="text-xs text-purple text-semi">Phase 2</span>
+                <span class="text-xs text-dim">Growing</span>
+              </div>
+              <div class="flex flex-col items-end gap-2">
+                <span class="text-xl text-bold text-rounded">4,832</span>
+                <span class="text-xs text-gray">steps today</span>
+              </div>
+            </div>
+            <div class="di-expanded-center">
+              <div style="position: relative;">
+                <div class="glow-circle" style="width: 80px; height: 80px; background: radial-gradient(circle, rgba(167,139,250,0.15) 0%, transparent 70%);">
+                  <canvas class="pixel-char" width="64" height="64" data-state="vital" data-size="64"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-between items-center" style="padding: 0 4px;">
+              <div class="flex items-center gap-4">
+                <span class="state-dot dot-vital"></span>
+                <span class="text-xs text-semi">Vital</span>
+              </div>
+              <div class="flex items-center gap-6">
+                <div style="width: 80px;">
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: 64%; background: #a78bfa;"></div>
+                  </div>
+                </div>
+                <span class="text-xs text-dim">64%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Character is the emotional centerpiece</li>
+          <li>Feels like a Tamagotchi — delightful</li>
+          <li>Clean layout, not overwhelming</li>
+        </ul>
+      </div>
+
+      <!-- Option C: Metric Cards -->
+      <div class="option-card" data-group="expanded" data-value="C" onclick="selectOption(this)">
+        <span class="option-label">Option C</span>
+        <span class="option-name">Metric Tiles</span>
+        <span class="option-desc">Character + three info tiles: steps, daily goal, weekly streak. Structured, data-forward layout.</span>
+        <div class="mockup-container">
+          <div class="di-expanded">
+            <div class="di-expanded-top">
+              <div class="flex items-center gap-8">
+                <div class="glow-circle" style="width: 48px; height: 48px; background: rgba(90,200,250,0.1);">
+                  <canvas class="pixel-char" width="40" height="40" data-state="neutral" data-size="40"></canvas>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <span class="text-md text-bold">Pixel Pace</span>
+                  <span class="text-xs text-dim">Phase 2 • Growing</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
+              <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px; text-align: center;">
+                <div class="text-lg text-bold text-rounded" style="color: #fff;">4.8k</div>
+                <div class="text-xs text-dim" style="margin-top: 2px;">steps</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px; text-align: center;">
+                <div class="text-lg text-bold" style="color: #5AC8FA;">64%</div>
+                <div class="text-xs text-dim" style="margin-top: 2px;">daily goal</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px; text-align: center;">
+                <div class="text-lg text-bold" style="color: #34C759;">4/7</div>
+                <div class="text-xs text-dim" style="margin-top: 2px;">streak</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Structured, app-quality feel</li>
+          <li>Three distinct metrics at a glance</li>
+          <li>Grid layout feels modern and polished</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MINIMAL ======================== -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Dynamic Island — Minimal</h2>
+    </div>
+    <p class="section-desc">Tiny circle shown when another app uses the other side of the Dynamic Island.</p>
+
+    <div class="options-grid">
+      <!-- Option A -->
+      <div class="option-card selected" data-group="minimal" data-value="A" onclick="selectOption(this)">
+        <span class="option-label">Option A</span>
+        <span class="option-name">Phase Ring</span>
+        <span class="option-desc">Character inside a colored ring that matches current phase. Ring color = progress signal.</span>
+        <div class="mockup-container">
+          <div class="di-minimal">
+            <div class="phase-ring" style="width: 32px; height: 32px; border-color: #5AC8FA;">
+              <canvas class="pixel-char" width="20" height="20" data-state="vital" data-size="20"></canvas>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Phase color visible at any size</li>
+          <li>Character still recognizable</li>
+          <li>Ring creates visual hierarchy</li>
+        </ul>
+      </div>
+
+      <!-- Option B -->
+      <div class="option-card" data-group="minimal" data-value="B" onclick="selectOption(this)">
+        <span class="option-label">Option B</span>
+        <span class="option-name">State Glow</span>
+        <span class="option-desc">Character with a subtle energy-state colored glow. Vital=green, Neutral=blue, Low=amber.</span>
+        <div class="mockup-container">
+          <div class="di-minimal" style="box-shadow: 0 0 8px rgba(52,199,89,0.4), 0 2px 12px rgba(0,0,0,0.5);">
+            <canvas class="pixel-char" width="22" height="22" data-state="vital" data-size="22"></canvas>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Energy state visible via glow color</li>
+          <li>Eye-catching without being distracting</li>
+          <li>Feels alive and dynamic</li>
+        </ul>
+      </div>
+
+      <!-- Option C -->
+      <div class="option-card" data-group="minimal" data-value="C" onclick="selectOption(this)">
+        <span class="option-label">Option C</span>
+        <span class="option-name">Progress Arc</span>
+        <span class="option-desc">Character with a circular progress arc around the edge showing daily goal completion.</span>
+        <div class="mockup-container">
+          <div class="di-minimal" style="position: relative;">
+            <svg width="36" height="36" viewBox="0 0 36 36" style="position: absolute; top: 2px; left: 2px;">
+              <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+              <circle cx="18" cy="18" r="16" fill="none" stroke="#a78bfa" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="36.2" transform="rotate(-90 18 18)" stroke-linecap="round"/>
+            </svg>
+            <canvas class="pixel-char" width="18" height="18" data-state="vital" data-size="18"></canvas>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Daily progress visible in smallest format</li>
+          <li>Arc fills up throughout the day</li>
+          <li>Combines character + data elegantly</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== HOME SCREEN WIDGET ======================== -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Home Screen Widget</h2>
+    </div>
+    <p class="section-desc">Medium-size widget for the home screen. Lives alongside other app icons. Refreshes every ~15 min.</p>
+
+    <div class="options-grid">
+      <!-- Option A: Classic Split -->
+      <div class="option-card selected" data-group="widget" data-value="A" onclick="selectOption(this)">
+        <span class="option-label">Option A</span>
+        <span class="option-name">Classic Split</span>
+        <span class="option-desc">Character left, stats right. Clean two-column layout with step count, phase, and mini bar chart.</span>
+        <div class="mockup-container">
+          <div class="widget-medium">
+            <div class="flex flex-col items-center gap-6" style="min-width: 80px;">
+              <div class="glow-circle" style="width: 72px; height: 72px; background: radial-gradient(circle, rgba(90,200,250,0.12) 0%, transparent 70%);">
+                <canvas class="pixel-char" width="56" height="56" data-state="vital" data-size="56"></canvas>
+              </div>
+              <span class="badge badge-blue">Vital</span>
+            </div>
+            <div class="flex flex-col gap-6" style="flex: 1;">
+              <div>
+                <div class="text-2xl text-bold text-rounded" style="line-height: 1;">4,832</div>
+                <div class="text-xs text-gray" style="margin-top: 2px;">steps today</div>
+              </div>
+              <div>
+                <div class="flex justify-between" style="margin-bottom: 4px;">
+                  <span class="text-xs text-dim">Daily goal</span>
+                  <span class="text-xs text-blue">64%</span>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: 64%; background: linear-gradient(90deg, #5AC8FA, #a78bfa);"></div>
+                </div>
+              </div>
+              <div class="mini-bars">
+                <div class="mini-bar" style="height: 12px; background: #34C759;"></div>
+                <div class="mini-bar" style="height: 5px; background: rgba(255,59,48,0.6);"></div>
+                <div class="mini-bar" style="height: 14px; background: #34C759;"></div>
+                <div class="mini-bar" style="height: 10px; background: #34C759;"></div>
+                <div class="mini-bar" style="height: 4px; background: rgba(255,59,48,0.6);"></div>
+                <div class="mini-bar" style="height: 11px; background: #34C759;"></div>
+                <div class="mini-bar" style="height: 9px; background: #5AC8FA;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Balanced: character + data side by side</li>
+          <li>Bar chart shows weekly trend</li>
+          <li>Goal progress is immediately clear</li>
+        </ul>
+      </div>
+
+      <!-- Option B: Hero Number -->
+      <div class="option-card" data-group="widget" data-value="B" onclick="selectOption(this)">
+        <span class="option-label">Option B</span>
+        <span class="option-name">Hero Number</span>
+        <span class="option-desc">Giant step count dominates. Character is smaller but present. Week dots below. Steps are the star.</span>
+        <div class="mockup-container">
+          <div class="widget-medium" style="flex-direction: column; align-items: flex-start; justify-content: center; padding: 16px 24px;">
+            <div class="flex w-full justify-between items-center">
+              <div class="flex items-end gap-8">
+                <div class="text-2xl text-bold text-rounded" style="font-size: 42px; line-height: 1;">4,832</div>
+                <div class="text-sm text-gray" style="padding-bottom: 4px;">steps</div>
+              </div>
+              <canvas class="pixel-char" width="44" height="44" data-state="vital" data-size="44"></canvas>
+            </div>
+            <div style="margin-top: 8px; width: 100%;">
+              <div class="progress-bar" style="margin-bottom: 8px;">
+                <div class="progress-fill" style="width: 64%; background: #34C759;"></div>
+              </div>
+              <div class="flex justify-between items-center">
+                <div class="week-dots">
+                  <div class="week-dot" style="background: #34C759; width: 8px; height: 8px;"></div>
+                  <div class="week-dot" style="background: #FF3B30; opacity: 0.5; width: 8px; height: 8px;"></div>
+                  <div class="week-dot" style="background: #34C759; width: 8px; height: 8px;"></div>
+                  <div class="week-dot" style="background: #34C759; width: 8px; height: 8px;"></div>
+                  <div class="week-dot" style="background: #FF3B30; opacity: 0.5; width: 8px; height: 8px;"></div>
+                  <div class="week-dot" style="background: #34C759; width: 8px; height: 8px;"></div>
+                  <div class="week-dot" style="background: #5AC8FA; width: 8px; height: 8px; box-shadow: 0 0 4px #5AC8FA;"></div>
+                </div>
+                <span class="text-xs text-dim">Phase 2 • Growing</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Step count readable from across the room</li>
+          <li>Data-forward design for metrics lovers</li>
+          <li>Week dots give context without clutter</li>
+        </ul>
+      </div>
+
+      <!-- Option C: Living Habitat -->
+      <div class="option-card" data-group="widget" data-value="C" onclick="selectOption(this)">
+        <span class="option-label">Option C</span>
+        <span class="option-name">Living Habitat</span>
+        <span class="option-desc">Character in a "scene" with ambient environment. Stats are subtle overlays. Feels alive on home screen.</span>
+        <div class="mockup-container">
+          <div class="widget-medium" style="position: relative; overflow: hidden; justify-content: center; flex-direction: column; align-items: center;">
+            <!-- Ground line -->
+            <div style="position: absolute; bottom: 28px; left: 20px; right: 20px; height: 1px; background: rgba(255,255,255,0.06);"></div>
+            <!-- Subtle stars -->
+            <div style="position: absolute; top: 16px; left: 24px; width: 2px; height: 2px; background: rgba(255,255,255,0.2); border-radius: 50%;"></div>
+            <div style="position: absolute; top: 30px; right: 40px; width: 2px; height: 2px; background: rgba(255,255,255,0.15); border-radius: 50%;"></div>
+            <div style="position: absolute; top: 22px; right: 80px; width: 1px; height: 1px; background: rgba(255,255,255,0.3); border-radius: 50%;"></div>
+            <div style="position: absolute; top: 14px; left: 100px; width: 2px; height: 2px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
+
+            <canvas class="pixel-char" width="56" height="56" data-state="vital" data-size="56" style="margin-bottom: 4px;"></canvas>
+            <div class="text-lg text-bold text-rounded" style="margin-bottom: 2px;">4,832 steps</div>
+
+            <div style="position: absolute; top: 12px; left: 16px;" class="flex items-center gap-4">
+              <div class="state-dot dot-vital"></div>
+              <span class="text-xs text-dim">Vital</span>
+            </div>
+            <div style="position: absolute; top: 12px; right: 16px;">
+              <span class="text-xs text-purple">Phase 2</span>
+            </div>
+            <div style="position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center;">
+              <div class="week-dots">
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #FF3B30; opacity: 0.5;"></div>
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #FF3B30; opacity: 0.5;"></div>
+                <div class="week-dot" style="background: #34C759;"></div>
+                <div class="week-dot" style="background: #5AC8FA; box-shadow: 0 0 4px #5AC8FA;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Character feels alive on home screen</li>
+          <li>Ambient aesthetic — premium feel</li>
+          <li>Differentiates from typical fitness widgets</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== LOCK SCREEN ======================== -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Lock Screen Widget</h2>
+    </div>
+    <p class="section-desc">Rectangular lock screen widget. Visible every time the user picks up their phone.</p>
+
+    <div class="options-grid">
+      <!-- Option A -->
+      <div class="option-card selected" data-group="lockscreen" data-value="A" onclick="selectOption(this)">
+        <span class="option-label">Option A</span>
+        <span class="option-name">Compact Stats</span>
+        <span class="option-desc">Character + step count + phase. Straightforward, readable at a glance on the lock screen.</span>
+        <div class="mockup-container">
+          <div class="ls-rectangular">
+            <canvas class="pixel-char" width="36" height="36" data-state="vital" data-size="36"></canvas>
+            <div class="flex flex-col gap-2">
+              <span class="text-sm text-semi text-rounded" style="color: rgba(255,255,255,0.9);">4,832 steps</span>
+              <div class="flex items-center gap-4">
+                <span class="state-dot dot-vital"></span>
+                <span class="text-xs" style="color: rgba(255,255,255,0.5);">Phase 2</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Clear and informative</li>
+          <li>Steps readable in all lighting</li>
+          <li>Phase info for progression context</li>
+        </ul>
+      </div>
+
+      <!-- Option B -->
+      <div class="option-card" data-group="lockscreen" data-value="B" onclick="selectOption(this)">
+        <span class="option-label">Option B</span>
+        <span class="option-name">Goal Tracker</span>
+        <span class="option-desc">Character + progress bar + percentage. Focused on daily goal completion.</span>
+        <div class="mockup-container">
+          <div class="ls-rectangular" style="width: 200px;">
+            <canvas class="pixel-char" width="32" height="32" data-state="neutral" data-size="32"></canvas>
+            <div class="flex flex-col gap-4" style="flex: 1;">
+              <div class="flex justify-between items-center">
+                <span class="text-xs" style="color: rgba(255,255,255,0.9);">Daily Goal</span>
+                <span class="text-xs text-semi" style="color: rgba(255,255,255,0.7);">64%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: 64%; background: rgba(255,255,255,0.7);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Progress bar visible on every phone pickup</li>
+          <li>Creates micro-motivation loops</li>
+          <li>Clean, focused on one thing</li>
+        </ul>
+      </div>
+
+      <!-- Option C -->
+      <div class="option-card" data-group="lockscreen" data-value="C" onclick="selectOption(this)">
+        <span class="option-label">Option C</span>
+        <span class="option-name">Week Streak</span>
+        <span class="option-desc">Character + 7-day dot streak. Focus on consistency and building habits over time.</span>
+        <div class="mockup-container">
+          <div class="ls-rectangular" style="width: 200px;">
+            <canvas class="pixel-char" width="32" height="32" data-state="vital" data-size="32"></canvas>
+            <div class="flex flex-col gap-4" style="flex: 1;">
+              <span class="text-xs text-semi" style="color: rgba(255,255,255,0.8);">This week</span>
+              <div class="week-dots" style="gap: 5px;">
+                <div class="week-dot" style="background: rgba(255,255,255,0.7); width: 8px; height: 8px;"></div>
+                <div class="week-dot" style="background: rgba(255,255,255,0.2); width: 8px; height: 8px;"></div>
+                <div class="week-dot" style="background: rgba(255,255,255,0.7); width: 8px; height: 8px;"></div>
+                <div class="week-dot" style="background: rgba(255,255,255,0.7); width: 8px; height: 8px;"></div>
+                <div class="week-dot" style="background: rgba(255,255,255,0.2); width: 8px; height: 8px;"></div>
+                <div class="week-dot" style="background: rgba(255,255,255,0.7); width: 8px; height: 8px;"></div>
+                <div class="week-dot" style="background: rgba(255,255,255,0.5); width: 8px; height: 8px; border: 1px solid rgba(255,255,255,0.5);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="pros-list">
+          <li>Habit-focused — builds accountability</li>
+          <li>Week view creates streak motivation</li>
+          <li>Works well in lock screen grayscale</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-spacer"></div>
+</div>
+
+<!-- Summary panel -->
+<div class="summary-panel">
+  <div class="summary-selections">
+    <div class="summary-item">
+      <span class="summary-label">Compact:</span>
+      <span class="summary-value" id="sel-compact">A - Minimal Zen</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-label">Expanded:</span>
+      <span class="summary-value" id="sel-expanded">A - Full Dashboard</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-label">Minimal:</span>
+      <span class="summary-value" id="sel-minimal">A - Phase Ring</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-label">Widget:</span>
+      <span class="summary-value" id="sel-widget">A - Classic Split</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-label">Lock Screen:</span>
+      <span class="summary-value" id="sel-lockscreen">A - Compact Stats</span>
+    </div>
+  </div>
+  <button class="export-btn" onclick="exportSelections()">Export Selections</button>
+</div>
+
+<script>
+// Pixel character drawing
+function drawPixelCharacter(canvas, state, size) {
+  const ctx = canvas.getContext('2d');
+  const s = size || canvas.width;
+  const px = Math.max(1, Math.floor(s / 16));
+
+  ctx.clearRect(0, 0, s, s);
+  ctx.imageSmoothingEnabled = false;
+
+  const colors = {
+    vital: { body: '#34C759', accent: '#2DA44E', eye: '#fff', outline: '#1a6b2a' },
+    neutral: { body: '#5AC8FA', accent: '#4BA3D4', eye: '#fff', outline: '#2a6b8a' },
+    low: { body: '#FF9F0A', accent: '#D4850A', eye: '#fff', outline: '#8a5a0a' }
+  };
+
+  const c = colors[state] || colors.vital;
+  const cx = Math.floor(s / 2);
+  const cy = Math.floor(s / 2);
+
+  // Body
+  ctx.fillStyle = c.body;
+  const bodyW = px * 6;
+  const bodyH = px * 7;
+  ctx.fillRect(cx - bodyW/2, cy - bodyH/2 + px, bodyW, bodyH);
+
+  // Head
+  ctx.fillStyle = c.accent;
+  const headW = px * 8;
+  const headH = px * 6;
+  ctx.fillRect(cx - headW/2, cy - bodyH/2 - headH + px * 2, headW, headH);
+
+  // Eyes
+  ctx.fillStyle = c.eye;
+  ctx.fillRect(cx - px * 2, cy - bodyH/2 - headH/2 + px * 2, px, px * 2);
+  ctx.fillRect(cx + px, cy - bodyH/2 - headH/2 + px * 2, px, px * 2);
+
+  // Legs
+  ctx.fillStyle = c.outline;
+  ctx.fillRect(cx - px * 2, cy + bodyH/2 + px, px * 2, px * 2);
+  ctx.fillRect(cx, cy + bodyH/2 + px, px * 2, px * 2);
+
+  // Arms
+  ctx.fillStyle = c.body;
+  ctx.fillRect(cx - bodyW/2 - px * 2, cy - px, px * 2, px * 4);
+  ctx.fillRect(cx + bodyW/2, cy - px, px * 2, px * 4);
+}
+
+// Initialize all pixel characters
+function initCharacters() {
+  document.querySelectorAll('.pixel-char').forEach(canvas => {
+    const state = canvas.dataset.state || 'vital';
+    const size = parseInt(canvas.dataset.size) || canvas.width;
+    canvas.width = size;
+    canvas.height = size;
+    drawPixelCharacter(canvas, state, size);
+  });
+}
+
+// Selection state
+const selections = {
+  compact: { value: 'A', name: 'Minimal Zen' },
+  expanded: { value: 'A', name: 'Full Dashboard' },
+  minimal: { value: 'A', name: 'Phase Ring' },
+  widget: { value: 'A', name: 'Classic Split' },
+  lockscreen: { value: 'A', name: 'Compact Stats' }
+};
+
+function selectOption(card) {
+  const group = card.dataset.group;
+  const value = card.dataset.value;
+
+  // Deselect others in group
+  document.querySelectorAll(`.option-card[data-group="${group}"]`).forEach(c => {
+    c.classList.remove('selected');
+  });
+
+  // Select this one
+  card.classList.add('selected');
+
+  // Update selection state
+  const name = card.querySelector('.option-name').textContent;
+  selections[group] = { value, name };
+
+  // Update summary
+  document.getElementById(`sel-${group}`).textContent = `${value} - ${name}`;
+}
+
+function exportSelections() {
+  let text = 'Pixel Pace Design Selections\n';
+  text += '================================\n\n';
+  for (const [group, sel] of Object.entries(selections)) {
+    const label = group.charAt(0).toUpperCase() + group.slice(1);
+    text += `${label}: Option ${sel.value} — ${sel.name}\n`;
+  }
+  text += '\n================================\n';
+  text += 'Ready for implementation!';
+
+  // Show in alert and copy to clipboard
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Selections copied to clipboard!\n\n' + text);
+  }).catch(() => {
+    alert(text);
+  });
+}
+
+// Animate characters slightly
+let animFrame = 0;
+function animate() {
+  animFrame++;
+  if (animFrame % 30 === 0) {
+    document.querySelectorAll('.pixel-char').forEach(canvas => {
+      const state = canvas.dataset.state || 'vital';
+      const size = parseInt(canvas.dataset.size) || canvas.width;
+      const ctx = canvas.getContext('2d');
+
+      // Subtle bounce
+      const offset = (animFrame % 60 < 30) ? 0 : -1;
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(0, offset);
+      drawPixelCharacter(canvas, state, size);
+      ctx.restore();
+    });
+  }
+  requestAnimationFrame(animate);
+}
+
+// Init
+initCharacters();
+animate();
+</script>
+</body>
+</html>

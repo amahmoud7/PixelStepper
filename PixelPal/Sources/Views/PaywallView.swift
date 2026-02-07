@@ -14,7 +14,16 @@ struct PaywallView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.04, green: 0.04, blue: 0.12),
+                    Color(red: 0.1, green: 0.04, blue: 0.18),
+                    Color(red: 0.04, green: 0.1, blue: 0.12)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 24) {
@@ -88,7 +97,11 @@ struct PaywallView: View {
                     }
 
                     // Purchase button
-                    Button(action: purchase) {
+                    Button(action: {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        purchase()
+                    }) {
                         if isPurchasing {
                             ProgressView()
                                 .tint(.black)
@@ -100,8 +113,17 @@ struct PaywallView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(selectedProduct != nil ? Color.white : Color.white.opacity(0.5))
-                    .cornerRadius(12)
+                    .background(
+                        LinearGradient(
+                            colors: selectedProduct != nil
+                                ? [.white, Color(white: 0.92)]
+                                : [Color.white.opacity(0.5), Color.white.opacity(0.4)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(14)
+                    .shadow(color: .white.opacity(selectedProduct != nil ? 0.15 : 0), radius: 8, y: 2)
                     .disabled(selectedProduct == nil || isPurchasing)
                     .padding(.horizontal, 40)
 
@@ -190,31 +212,64 @@ private struct PhaseIcon: View {
     let phase: Int
     let isUnlocked: Bool
     let gender: Gender
+    @State private var pulseScale: CGFloat = 1.0
+
+    private var stateForPhase: AvatarState {
+        switch phase {
+        case 1: return .low
+        case 2: return .neutral
+        case 3, 4: return .vital
+        default: return .low
+        }
+    }
+
+    private var phaseColor: Color {
+        switch phase {
+        case 1: return .gray
+        case 2: return .blue
+        case 3: return .purple
+        case 4: return .orange
+        default: return .gray
+        }
+    }
 
     var body: some View {
         ZStack {
+            Circle()
+                .fill(phaseColor.opacity(isUnlocked ? 0.2 : 0.05))
+                .frame(width: 60, height: 60)
+
             if isUnlocked {
-                Image(SpriteAssets.spriteName(gender: gender, state: .neutral, frame: 1))
+                Image(SpriteAssets.spriteName(gender: gender, state: stateForPhase, frame: 1))
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 40, height: 40)
+                    .frame(width: 48, height: 48)
             } else {
-                Image(SpriteAssets.spriteName(gender: gender, state: .neutral, frame: 1))
+                Image(SpriteAssets.spriteName(gender: gender, state: stateForPhase, frame: 1))
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.black.opacity(0.6))
-                    )
+                    .frame(width: 48, height: 48)
+                    .opacity(0.4)
                     .overlay(
                         Image(systemName: "lock.fill")
-                            .foregroundColor(.white.opacity(0.8))
-                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.9))
+                            .font(.body)
                     )
+                    .scaleEffect(pulseScale)
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                            pulseScale = 1.05
+                        }
+                    }
             }
+
+            // Phase number
+            Text("\(phase)")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(phaseColor)
+                .offset(y: 34)
         }
     }
 }
@@ -258,17 +313,30 @@ private struct SubscriptionOption: View {
     let isBestValue: Bool
     let action: () -> Void
 
+    private var perMonthText: String? {
+        guard isBestValue,
+              let subscription = product.subscription,
+              subscription.subscriptionPeriod.unit == .year else {
+            return nil
+        }
+        let monthly = product.price / 12
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale.current
+        return formatter.string(from: monthly as NSDecimalNumber)
+    }
+
     var body: some View {
         Button(action: action) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+                    HStack(spacing: 6) {
                         Text(product.displayName)
                             .font(.headline)
                             .foregroundColor(.white)
 
                         if isBestValue {
-                            Text("BEST VALUE")
+                            Text("SAVE 44%")
                                 .font(.caption2)
                                 .fontWeight(.bold)
                                 .foregroundColor(.black)
@@ -279,9 +347,15 @@ private struct SubscriptionOption: View {
                         }
                     }
 
-                    Text(product.description)
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    if let perMonth = perMonthText {
+                        Text("Just \(perMonth)/month")
+                            .font(.caption)
+                            .foregroundColor(.green.opacity(0.9))
+                    } else {
+                        Text(product.description)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
                 }
 
                 Spacer()
@@ -292,7 +366,11 @@ private struct SubscriptionOption: View {
             }
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isSelected ? Color.white.opacity(0.08) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? Color.white : Color.white.opacity(0.3), lineWidth: isSelected ? 2 : 1)
             )
         }

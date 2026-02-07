@@ -15,7 +15,16 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.04, green: 0.04, blue: 0.12),
+                    Color(red: 0.1, green: 0.04, blue: 0.18),
+                    Color(red: 0.04, green: 0.1, blue: 0.12)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Progress indicator
@@ -93,15 +102,27 @@ private struct ProgressIndicator: View {
 
 private struct IdentityHookScreen: View {
     let onContinue: () -> Void
+    @State private var animFrame: Int = 1
+    private let frameTimer = Timer.publish(every: 0.8, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 24) {
-            // Animated character preview
-            Image("male_neutral_1")
-                .interpolation(.none)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 100, height: 100)
+            // Animated character preview (shows both genders side by side)
+            HStack(spacing: 20) {
+                Image(SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 64, height: 64)
+                Image(SpriteAssets.spriteName(gender: .female, state: .vital, frame: animFrame))
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 64, height: 64)
+            }
+            .onReceive(frameTimer) { _ in
+                animFrame = animFrame == 1 ? 2 : 1
+            }
 
             Text("Your steps tell a story")
                 .font(.title)
@@ -527,34 +548,48 @@ private struct OnboardingButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            action()
+        }) {
             Text(title)
                 .font(.headline)
                 .foregroundColor(.black)
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(Color.white)
-                .cornerRadius(12)
+                .background(
+                    LinearGradient(
+                        colors: [.white, Color(white: 0.92)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .cornerRadius(14)
+                .shadow(color: .white.opacity(0.2), radius: 8, y: 2)
         }
         .padding(.horizontal, 40)
     }
 }
 
 private struct DynamicIslandPreview: View {
+    @State private var animFrame: Int = 1
+    private let frameTimer = Timer.publish(every: 0.8, on: .main, in: .common).autoconnect()
+
     var body: some View {
-        // Mock Dynamic Island shape
         HStack(spacing: 12) {
-            // Camera cutout
             Circle()
                 .fill(Color.black)
                 .frame(width: 12, height: 12)
 
-            // Character preview
-            Image("male_neutral_1")
+            Image(SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
                 .interpolation(.none)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 24, height: 24)
+                .onReceive(frameTimer) { _ in
+                    animFrame = animFrame == 1 ? 2 : 1
+                }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

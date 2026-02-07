@@ -7,9 +7,9 @@ You are the orchestration layer for PixelPal's agent system. You decide which ag
 ## Core References
 
 Before any coordination, read:
-- `/Users/akrammahmoud/PixelPalFit/CLAUDE.md` - Non-negotiable constraints
-- `/Users/akrammahmoud/PixelPalFit/context.md` - Product requirements
-- `/Users/akrammahmoud/PixelPalFit/agents/_shared/principles.md` - Shared principles
+- `CLAUDE.md` - Non-negotiable constraints
+- `context.md` - Product requirements
+- `agents/_shared/principles.md` - Shared principles
 
 ## Available Agents
 

@@ -50,21 +50,44 @@ class StoreManager: ObservableObject {
 
     // MARK: - Product Loading
 
-    /// Loads available subscription products from App Store.
+    /// Loads available subscription products from App Store with timeout.
     func loadProducts() async {
         isLoading = true
         errorMessage = nil
 
         do {
             let productIDs = ProductID.allCases.map { $0.rawValue }
-            let storeProducts = try await Product.products(for: productIDs)
+            let storeProducts = try await withTimeout(seconds: 15) {
+                try await Product.products(for: productIDs)
+            }
             products = storeProducts.sorted { $0.price < $1.price }
+        } catch is TimeoutError {
+            errorMessage = "Loading timed out. Please check your connection."
+            print("StoreManager: Product loading timed out")
         } catch {
             errorMessage = "Failed to load products: \(error.localizedDescription)"
             print("StoreManager: \(errorMessage ?? "")")
         }
 
         isLoading = false
+    }
+
+    /// Runs an async operation with a timeout.
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw TimeoutError()
+            }
+            guard let result = try await group.next() else {
+                throw TimeoutError()
+            }
+            group.cancelAll()
+            return result
+        }
     }
 
     // MARK: - Purchasing
@@ -245,3 +268,6 @@ enum StoreError: LocalizedError {
         }
     }
 }
+
+/// Error thrown when an async operation exceeds its timeout.
+struct TimeoutError: Error {}

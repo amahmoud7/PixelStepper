@@ -116,23 +116,30 @@ For support, email akrammahmoud@example.com
 ## App Review Notes
 
 **HealthKit Usage:**
-Pixel Stepper reads step count data from HealthKit to determine the character's energy state (vital/neutral/low), track daily missions, calculate streaks, and award Step Coins. This is the core mechanic of the app - the character's appearance and progression reflect the user's daily movement.
+Pixel Stepper reads step count data from HealthKit to determine the character's energy state (vital/neutral/low), track daily missions, calculate streaks, and award Step Coins. This is the core mechanic of the app - the character's appearance and progression reflect the user's daily movement. The HealthKit permission request uses the standard system dialog with neutral button text ("Continue"). If the user declines permission, the app remains fully functional but step data shows as 0, and a help banner provides guidance on enabling access through the Health app.
 
 **Live Activity:**
 The app uses Live Activities to display the pixel character on the Lock Screen and Dynamic Island. The character animates between 2 frames locally using TimelineView. Live Activity content updates when step count changes significantly (not continuously).
 
 **Step Coins & Cosmetics:**
-Step Coins are a virtual currency earned through walking (completing missions, maintaining streaks, hitting milestones). They can only be spent in the in-app Cosmetic Shop on avatar customization items. No real money can purchase Step Coins directly - they are purely earned through activity.
+Step Coins are a virtual currency earned exclusively through walking activity (completing daily missions, maintaining streaks, hitting step milestones). They can only be spent in the in-app Cosmetic Shop on avatar customization items (hats, backgrounds, accessories). No real money can purchase Step Coins directly — they are purely earned through physical activity.
+
+**Business Model:**
+1. **Who are the users?** Health-conscious individuals who want a fun, gamified walking motivation app. The app is suitable for all ages (4+).
+2. **Where can users purchase features?** Premium subscriptions are available exclusively through Apple's in-app purchase system (StoreKit 2). The paywall is accessible from the Home tab (crown icon) and the Profile tab. Subscriptions are auto-renewable.
+3. **What can premium users access?** Premium subscribers unlock: all 4 evolution phases (free users get phases 1-2), 2x Step Coin earnings, exclusive cosmetic shop items, weekly challenges, streak freeze protection, and premium share card styles.
+4. **What is available without purchase?** The core app is fully functional for free: step tracking, pixel character animation, Live Activity, Home Screen widget, phases 1-2, 3 daily missions, streak tracking, basic cosmetic items (18 of 30), and standard share cards. Premium enhances the experience but is not required.
 
 **Demo Instructions:**
-1. Launch app and complete onboarding (select gender)
-2. Grant HealthKit permission when prompted
+1. Launch app and complete onboarding (select gender, tap "Continue")
+2. The system HealthKit permission dialog will appear — grant or deny (app works either way)
 3. The home screen shows your pixel avatar with current step count
 4. Swipe between Home, Stats, and Profile tabs
 5. Home tab: View avatar, streak info, daily missions
 6. Stats tab: View weekly history, personal records, phase progress
 7. Profile tab: Wardrobe, Cosmetic Shop, settings
-8. Walk to see character energy change and missions progress
+8. To test Premium: Profile tab → tap "Unlock Premium" or Home tab → crown icon
+9. Walk to see character energy change and missions progress
 
 ---
 

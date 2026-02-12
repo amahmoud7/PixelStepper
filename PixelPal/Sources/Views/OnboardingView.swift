@@ -701,7 +701,7 @@ private struct PermissionScreen: View {
 
             Spacer()
 
-            OnboardingCTA(title: "Enable Steps & Go") {
+            OnboardingCTA(title: "Continue") {
                 completeOnboarding()
             }
             .opacity(buttonAppeared ? 1 : 0)

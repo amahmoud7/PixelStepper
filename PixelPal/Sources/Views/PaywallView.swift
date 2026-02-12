@@ -102,9 +102,42 @@ struct PaywallView: View {
 
                     // Subscription options
                     if storeManager.isLoading {
-                        ProgressView()
-                            .tint(.white)
-                            .padding(.vertical, 20)
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .tint(.white)
+                            Text("Loading plans...")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                        .padding(.vertical, 20)
+                    } else if storeManager.products.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 24))
+                                .foregroundColor(.yellow.opacity(0.7))
+                            Text("Unable to load subscription plans")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+                            Text("Please check your internet connection and try again.")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.4))
+                                .multilineTextAlignment(.center)
+                            Button(action: {
+                                Task { await storeManager.loadProducts() }
+                            }) {
+                                Text("Retry")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundColor(purple)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        Capsule()
+                                            .stroke(purple.opacity(0.5), lineWidth: 1.5)
+                                    )
+                            }
+                        }
+                        .padding(.vertical, 20)
+                        .padding(.horizontal, 32)
                     } else {
                         VStack(spacing: 10) {
                             if let yearly = storeManager.yearlyProduct {
@@ -135,35 +168,37 @@ struct PaywallView: View {
                     Spacer().frame(height: 24)
 
                     // Purchase CTA
-                    Button(action: {
-                        let impact = UIImpactFeedbackGenerator(style: .medium)
-                        impact.impactOccurred()
-                        purchase()
-                    }) {
-                        if isPurchasing {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Text(purchaseButtonTitle)
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
+                    if !storeManager.products.isEmpty {
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            purchase()
+                        }) {
+                            if isPurchasing {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text(purchaseButtonTitle)
+                                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
                         }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: selectedProduct != nil
-                                ? [purple, cyan.opacity(0.8)]
-                                : [Color.white.opacity(0.15), Color.white.opacity(0.1)],
-                            startPoint: .leading,
-                            endPoint: .trailing
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(
+                                colors: selectedProduct != nil
+                                    ? [purple, cyan.opacity(0.8)]
+                                    : [Color.white.opacity(0.15), Color.white.opacity(0.1)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                    .cornerRadius(16)
-                    .shadow(color: selectedProduct != nil ? purple.opacity(0.4) : .clear, radius: 16, y: 6)
-                    .disabled(selectedProduct == nil || isPurchasing)
-                    .padding(.horizontal, 32)
+                        .cornerRadius(16)
+                        .shadow(color: selectedProduct != nil ? purple.opacity(0.4) : .clear, radius: 16, y: 6)
+                        .disabled(selectedProduct == nil || isPurchasing)
+                        .padding(.horizontal, 32)
+                    }
 
                     Spacer().frame(height: 16)
 

@@ -1,21 +1,22 @@
-# Privacy Policy for Pixel Pace
+# Privacy Policy for Pixel Stepper
 
-**Last Updated: January 12, 2025**
+**Last Updated: February 2026**
 
 ## Introduction
 
-Pixel Pace ("we," "our," or "the app") is committed to protecting your privacy. This Privacy Policy explains how we handle information when you use our iOS application.
+Pixel Stepper ("we," "our," or "the app") is committed to protecting your privacy. This Privacy Policy explains how we handle information when you use our iOS application.
 
 ## Information We Access
 
 ### HealthKit Data
-- **Step Count**: We read your daily step count from Apple HealthKit to determine your character's energy state.
-- This data is used solely within the app to animate your character.
+- **Step Count**: We read your daily step count from Apple HealthKit to determine your character's energy state, track daily missions, and calculate streak progress.
+- This data is used solely within the app to animate your character and track your walking progress.
 - **We do not store, collect, or transmit your health data to any server.**
 
 ### Data Stored on Your Device
 - **Character Preference**: Your selected character gender (stored locally)
-- **Progress Data**: Your evolution phase progress (stored locally)
+- **Progress Data**: Your evolution phase progress, step coin balance, streak data, and mission progress (stored locally as JSON files)
+- **Cosmetic Inventory**: Your purchased and equipped cosmetic items (stored locally)
 - **Subscription Status**: Whether you have premium features (managed by Apple)
 
 ## Information We Do NOT Collect
@@ -31,8 +32,9 @@ Pixel Pace ("we," "our," or "the app") is committed to protecting your privacy. 
 
 ### Apple Services
 - **HealthKit**: Used to read step count data (read-only)
-- **StoreKit**: Used to process in-app purchases (handled entirely by Apple)
-- **WidgetKit/ActivityKit**: Used to display your character on Lock Screen and Dynamic Island
+- **StoreKit**: Used to process in-app subscriptions (handled entirely by Apple)
+- **WidgetKit/ActivityKit**: Used to display your character on Lock Screen, Dynamic Island, and Home Screen widgets
+- **App Groups**: Used to share character state between the app and its widget extension (on-device only)
 
 We do not use any third-party analytics, advertising, or tracking services.
 
@@ -42,7 +44,7 @@ All your data remains on your device. We do not operate servers or databases tha
 
 ## Children's Privacy
 
-Pixel Pace does not collect personal information from anyone, including children under 13. The app is safe for users of all ages.
+Pixel Stepper does not collect personal information from anyone, including children under 13. The app is safe for users of all ages.
 
 ## In-App Purchases
 
@@ -62,7 +64,7 @@ If you have questions about this Privacy Policy, please contact us at:
 
 ## Summary
 
-**Pixel Pace is designed with privacy in mind:**
+**Pixel Stepper is designed with privacy in mind:**
 - No accounts required
 - No data collection
 - No tracking

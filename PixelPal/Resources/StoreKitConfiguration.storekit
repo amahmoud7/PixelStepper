@@ -66,7 +66,7 @@
       "localizations" : [
 
       ],
-      "name" : "Pixel Pace Premium",
+      "name" : "Pixel Stepper Premium",
       "subscriptions" : [
         {
           "adHocOffers" : [
@@ -87,7 +87,7 @@
           },
           "localizations" : [
             {
-              "description" : "Full access to all evolution phases",
+              "description" : "Full access to all phases, 2x coins, cosmetics & more",
               "displayName" : "Monthly Premium",
               "locale" : "en_US"
             }
@@ -117,7 +117,7 @@
           },
           "localizations" : [
             {
-              "description" : "Full access to all evolution phases - best value!",
+              "description" : "Full access to all phases, 2x coins, cosmetics & more - best value!",
               "displayName" : "Yearly Premium",
               "locale" : "en_US"
             }

@@ -136,7 +136,7 @@ final class ShareDestinationManager {
     // MARK: - Save GIF to Files
 
     func saveGIFToFiles(data: Data) {
-        let fileName = "PixelPace_\(Self.dateStamp()).gif"
+        let fileName = "PixelStepper_\(Self.dateStamp()).gif"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         do {
             try data.write(to: tempURL)
@@ -178,7 +178,7 @@ final class ShareDestinationManager {
 
     func presentShareSheet(gifData: Data) {
         let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pixelpace_\(UUID().uuidString).gif")
+            .appendingPathComponent("pixelstepper_\(UUID().uuidString).gif")
         do {
             try gifData.write(to: tempURL)
         } catch {

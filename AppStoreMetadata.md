@@ -111,7 +111,7 @@ For questions, contact akrammahmoud@example.com
 
 ## Support URL Text
 
-https://github.com/amahmoud7/PixelPalFit/issues
+https://github.com/amahmoud7/PixelStepper/issues
 
 ---
 

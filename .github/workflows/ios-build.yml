@@ -1,0 +1,64 @@
+name: iOS Build & Test
+
+on:
+  push:
+    paths-ignore:
+      - "**.md"
+      - "demo/**"
+      - "presentations/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Pick simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          devices = json.load(sys.stdin)['devices']
+          runtimes = sorted((k for k in devices if 'iOS' in k), reverse=True)
+          print(next(d['udid'] for r in runtimes for d in devices[r] if d['name'].startswith('iPhone')))
+          ")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project PixelStepper.xcodeproj \
+            -scheme PixelPal \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            > build.log 2>&1 && STATUS=0 || STATUS=$?
+          grep -E "error:|warning: .*deprecated|Test Case .* failed|XCTAssert|\*\* (BUILD|TEST) " build.log | sort -u | head -150
+          tail -5 build.log
+          exit $STATUS
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log

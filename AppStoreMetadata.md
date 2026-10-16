@@ -4,7 +4,7 @@
 
 **App Name:** Pixel Stepper
 
-**Subtitle:** Walk, evolve & grow your companion
+**Subtitle:** Walk to evolve your tiny pet
 
 **Category:** Health & Fitness
 
@@ -38,15 +38,15 @@ Pixel Stepper turns your daily steps into a living pixel character. No guilt tri
 - Home Screen widgets (small, medium, large)
 - No ads, no spam notifications
 
-**Coming soon:** Wardrobe & Cosmetic Shop — spend your Step Coins on hats, backgrounds, and accessories to style your companion.
-
 Pixel Stepper isn't another step counter. It's a quiet companion that walks with you.
 
 ---
 
 ## Keywords
 
-pixel,walking,steps,pedometer,companion,tamagotchi,pet,widget,lock screen,dynamic island,fitness,streak,missions,motivation,avatar
+walking,pedometer,step counter,pet,widget,lock screen,dynamic island,streak,missions,motivation
+
+(95/100 chars. Words already in the name/subtitle and the category name are indexed automatically, so they're omitted.)
 
 ---
 
@@ -63,7 +63,8 @@ Massive update! Here's what's new:
 - Improved widget with real-time step data
 - Phase progress tracking in Stats
 - Better HealthKit sync on app resume
-- Wardrobe & Cosmetic Shop coming soon!
+
+(Not shown for a first release; use from the first update onward.)
 
 ---
 
@@ -105,7 +106,17 @@ Pixel Stepper accesses your step count solely to determine your character's ener
 Premium features are managed through Apple's App Store. We do not process payments directly.
 
 **Contact:**
-For questions, contact akrammahmoud@example.com
+For questions, open an issue at https://github.com/amahmoud7/PixelStepper/issues
+
+---
+
+## Privacy Policy URL
+
+https://github.com/amahmoud7/PixelStepper/blob/main/PRIVACY_POLICY.md
+
+## Terms of Use (EULA) URL
+
+https://www.apple.com/legal/internet-services/itunes/dev/stdeula/ (Apple standard EULA; also link it in the App Description or the EULA field in App Store Connect)
 
 ---
 
@@ -119,11 +130,11 @@ https://github.com/amahmoud7/PixelStepper/issues
 
 ### Monthly Premium ($2.99/month)
 **Display Name:** Monthly Premium
-**Description:** Unlock all evolution phases, 2x Step Coins, exclusive cosmetics, weekly challenges, streak freeze, and premium share cards. Cancel anytime.
+**Description:** Unlock all phases, 2x coins & premium share cards
 
 ### Yearly Premium ($19.99/year)
 **Display Name:** Yearly Premium
-**Description:** Best value! Everything in Monthly Premium at over 35% savings. Unlock all phases, 2x coins, exclusive cosmetics, and more.
+**Description:** Best value: all premium features, billed yearly
 
 ---
 
@@ -136,7 +147,7 @@ Pixel Stepper reads step count data from HealthKit to determine the character's 
 The app uses Live Activities to display the pixel character on the Lock Screen and Dynamic Island. The character animates between 2 frames locally using TimelineView. Live Activity content updates when step count changes significantly (not continuously).
 
 **Step Coins:**
-Step Coins are a virtual currency earned exclusively through walking activity (completing daily missions, maintaining streaks, hitting step milestones). No real money can purchase Step Coins directly — they are purely earned through physical activity. A Cosmetic Shop where coins can be spent on avatar customization is planned for a future update and currently shows a "Coming Soon" prompt.
+Step Coins are a virtual currency earned exclusively through walking activity (completing daily missions, maintaining streaks, hitting step milestones). No real money can purchase Step Coins directly — they are purely earned through physical activity.
 
 **Business Model:**
 1. **Who are the users?** Health-conscious individuals who want a fun, gamified walking motivation app. The app is suitable for all ages (4+).
@@ -152,9 +163,8 @@ Step Coins are a virtual currency earned exclusively through walking activity (c
 5. Home tab: View avatar, streak info, daily missions
 6. Stats tab: View weekly history, personal records, phase progress
 7. Profile tab: Personal stats, Live Activity toggle, premium card
-8. Profile tab → Wardrobe shows "Coming Soon" alert (Cosmetic Shop in development)
-9. To test Premium: Profile tab → tap "Unlock Premium" or Home tab → crown icon
-10. Walk to see character energy change and missions progress
+8. To test Premium: Profile tab → tap "Unlock Premium" or Home tab → crown icon
+9. Walk to see character energy change and missions progress
 
 ---
 
@@ -178,14 +188,15 @@ No objectionable content.
 
 ## Checklist Before Submission
 
-- [ ] Save app icon (1024x1024) to AppIcon.appiconset/AppIcon.png
-- [ ] Take screenshots on iPhone 16 Pro (6.9")
-- [ ] Take screenshots on iPhone 8 Plus (5.5")
+- [x] Save app icon (1024x1024, no alpha) to AppIcon.appiconset/AppIcon.png
+- [ ] Screenshots: one set at 1206×2622 (iPhone 16 Pro / 17 Pro, 6.3"). Smaller sizes auto-scale; iPad not needed (iPhone-only). Lock Screen / Dynamic Island shot in the first 3. Flatten PNGs (no alpha).
+- [ ] Optional app preview: 886×1920, 15–30 s, H.264, ≤30 fps, hook in first 3 s
 - [ ] Update App Store Connect app listing with new description
-- [ ] Verify in-app purchases match pricing ($2.99/$19.99)
-- [ ] Upload privacy policy to web URL
+- [ ] Verify in-app purchases match pricing ($2.99/$19.99) and IAP descriptions ≤55 chars
+- [ ] Set Privacy Policy URL + privacy label "Data Not Collected"
+- [ ] Pricing & Availability: uncheck Apple silicon Mac and Apple Vision Pro
+- [ ] Run `xcodegen generate`, then tests, on the Mac
 - [ ] Test on physical device
 - [ ] Verify HealthKit permission flow works correctly
-- [ ] Verify Wardrobe shows "Coming Soon" alert
-- [ ] Archive and upload build
+- [ ] Archive with the latest Xcode (iOS 27 SDK required from April 2027) and upload
 - [ ] Submit for review

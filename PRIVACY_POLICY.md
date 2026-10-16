@@ -58,7 +58,7 @@ We may update this Privacy Policy from time to time. Any changes will be reflect
 
 If you have questions about this Privacy Policy, please contact us at:
 
-**Email**: akrammahmoud@example.com
+**GitHub Issues**: https://github.com/amahmoud7/PixelStepper/issues
 
 ---
 

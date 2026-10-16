@@ -87,7 +87,7 @@
           },
           "localizations" : [
             {
-              "description" : "Full access to all phases, 2x coins, cosmetics & more",
+              "description" : "Unlock all phases, 2x coins & premium share cards",
               "displayName" : "Monthly Premium",
               "locale" : "en_US"
             }
@@ -117,7 +117,7 @@
           },
           "localizations" : [
             {
-              "description" : "Full access to all phases, 2x coins, cosmetics & more - best value!",
+              "description" : "Best value: all premium features, billed yearly",
               "displayName" : "Yearly Premium",
               "locale" : "en_US"
             }

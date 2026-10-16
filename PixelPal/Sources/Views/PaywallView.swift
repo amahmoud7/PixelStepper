@@ -86,9 +86,6 @@ struct PaywallView: View {
                         BenefitRow(icon: "paintpalette.fill", color: purple,
                                    title: "Premium Share Cards",
                                    desc: "Exclusive backgrounds & styles")
-                        BenefitRow(icon: "crown", color: Color(red: 1.0, green: 0.84, blue: 0.0),
-                                   title: "Exclusive Cosmetics",
-                                   desc: "Premium hats, backgrounds & accessories")
                         BenefitRow(icon: "2.circle.fill", color: Color(red: 1.0, green: 0.84, blue: 0.0),
                                    title: "2x Step Coins",
                                    desc: "Double coins from all rewards")
@@ -215,8 +212,8 @@ struct PaywallView: View {
                     Text(isTrialEligible
                          ? "Free trial starts immediately. Cancel anytime. Auto-renews unless cancelled 24 hours before period end."
                          : "Cancel anytime. Auto-renews unless cancelled 24 hours before period end.")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.2))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
 
@@ -224,11 +221,11 @@ struct PaywallView: View {
 
                     // Privacy & Terms links
                     HStack(spacing: 16) {
-                        Link("Privacy Policy", destination: URL(string: "https://pixelstepper.app/privacy")!)
-                        Link("Terms of Service", destination: URL(string: "https://pixelstepper.app/terms")!)
+                        Link("Privacy Policy", destination: URL(string: "https://github.com/amahmoud7/PixelStepper/blob/main/PRIVACY_POLICY.md")!)
+                        Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
                     }
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
 
                     Spacer().frame(height: 40)
                 }

@@ -277,16 +277,16 @@ class AppStateManager: ObservableObject {
                 }
             }
         }
-
-        requestReviewIfEligible()
     }
 
+    /// Asks for a rating on a happy moment (daily goal hit), never on top of the paywall.
     private func requestReviewIfEligible() {
         let progress = PersistenceManager.shared.progressState
         guard !progress.hasRequestedReview else { return }
         guard progress.currentPhase >= 2 else { return }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            guard !self.showPaywall else { return }
             guard let windowScene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else { return }
             SKStoreReviewController.requestReview(in: windowScene)
@@ -303,6 +303,7 @@ class AppStateManager: ObservableObject {
         if todaySteps >= dailyGoal && previousTodaySteps < dailyGoal {
             celebrationManager.tryTrigger(.dailyGoalMet(steps: todaySteps))
             awardCoins(25)
+            requestReviewIfEligible()
         }
 
         // Streak milestones

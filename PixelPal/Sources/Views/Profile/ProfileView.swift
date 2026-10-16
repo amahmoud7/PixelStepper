@@ -4,7 +4,6 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject var appState: AppStateManager
     @EnvironmentObject var healthManager: HealthKitManager
-    @State private var showComingSoon = false
 
     private var progress: ProgressState {
         PersistenceManager.shared.progressState
@@ -26,20 +25,12 @@ struct ProfileView: View {
                 // Premium card
                 premiumCard
 
-                // Wardrobe (Coming Soon)
-                wardrobeComingSoon
-
                 // Settings link
                 settingsLink
 
                 Spacer().frame(height: 100)
             }
             .padding(.horizontal, 16)
-        }
-        .alert("Coming Soon", isPresented: $showComingSoon) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("The Wardrobe & Shop are still being designed. Stay tuned for cosmetic items in a future update!")
         }
     }
 
@@ -276,42 +267,6 @@ struct ProfileView: View {
                     )
                 }
             }
-        }
-    }
-
-    // MARK: - Wardrobe (Coming Soon)
-
-    private var wardrobeComingSoon: some View {
-        Button(action: { showComingSoon = true }) {
-            HStack(spacing: 12) {
-                Image(systemName: "paintpalette.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(Color(red: 0.49, green: 0.36, blue: 0.99))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Wardrobe")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                    Text("Coming Soon")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                }
-
-                Spacer()
-
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.3))
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.15), lineWidth: 1)
-                    )
-            )
         }
     }
 

@@ -10,7 +10,7 @@ class HealthKitManager: ObservableObject {
     /// Per-day step counts for the last 7 days, keyed by start-of-day Date.
     @Published var dailyStepsLast7Days: [Date: Int] = [:]
 
-    /// Cumulative steps since user profile creation.
+    /// Cumulative steps (all history up to now).
     @Published var cumulativeSteps: Int = 0
 
     /// Whether HealthKit authorization has been requested (not whether granted —
@@ -22,14 +22,20 @@ class HealthKitManager: ObservableObject {
         HKHealthStore.isHealthDataAvailable()
     }
 
-    /// Last sync timestamp.
-    @Published var lastSync: Date?
+    /// Last sync timestamp (not published: no view reads it, and publishing re-renders the tree).
+    private(set) var lastSync: Date?
 
-    /// Cache duration for cumulative steps (1 hour).
-    private let cacheDuration: TimeInterval = 3600
+    /// Steps before today, cached per day. Cumulative = this + today's live count,
+    /// so the expensive multi-year sum runs once a day instead of on every foreground.
+    private var priorDaysCache: (dayStart: Date, steps: Int)?
 
-    /// Cached cumulative value and timestamp.
-    private var cumulativeCache: (steps: Int, timestamp: Date)?
+    /// Throttles duplicate fetches fired by launch/foreground/authorization in quick succession.
+    private var lastFetch = Date.distantPast
+    private let fetchThrottle: TimeInterval = 5
+
+    private var stepType: HKQuantityType {
+        HKQuantityType.quantityType(forIdentifier: .stepCount)!
+    }
 
     /// Requests HealthKit authorization and fetches data.
     /// Safe to call on every app launch — idempotent if already granted.
@@ -39,88 +45,101 @@ class HealthKitManager: ObservableObject {
             return
         }
 
-        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
         let typesToShare: Set<HKSampleType> = []
         let typesToRead: Set<HKObjectType> = [stepType]
 
-        healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { success, error in
+        healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { success, _ in
             DispatchQueue.main.async {
                 // Note: For read-only permissions, success=true even if user denied.
                 // This is Apple's privacy-by-design — we can't detect read denial.
                 self.isAuthorized = success
                 // Always try to fetch data — if denied, queries return 0 silently.
-                self.fetchData()
+                self.fetchData(force: true)
                 completion(success)
             }
         }
     }
 
-    func fetchData() {
+    /// Fetches today's steps and the last 7 days. Calls within a few seconds of each other are coalesced.
+    func fetchData(force: Bool = false) {
+        guard force || Date().timeIntervalSince(lastFetch) > fetchThrottle else { return }
+        lastFetch = Date()
         fetchTodaySteps()
         fetchDailyStepsLast7Days()
-    }
-
-    /// Fetches all data including cumulative steps since baseline.
-    /// - Parameter baselineDate: The date to start cumulative counting from.
-    func fetchAllData(since baselineDate: Date) {
-        fetchTodaySteps()
-        fetchDailyStepsLast7Days()
-        fetchCumulativeSteps(since: baselineDate)
     }
 
     private func fetchTodaySteps() {
-        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+        queryTodaySteps { _ in }
+    }
+
+    /// Awaitable today-only refresh (pull-to-refresh), so the spinner tracks the real query.
+    @MainActor
+    func refreshToday() async {
+        lastFetch = Date()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queryTodaySteps { _ in continuation.resume() }
+        }
+    }
+
+    /// Runs today's step sum and applies it on the main queue, then calls `completion` there.
+    private func queryTodaySteps(completion: @escaping (Bool) -> Void) {
         let now = Date()
         let startOfDay = Calendar.current.startOfDay(for: now)
         let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: now, options: .strictStartDate)
 
-        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-            guard let result = result, let sum = result.sumQuantity() else {
+        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { [weak self] _, result, error in
+            // "No data" (no samples yet today) is a real zero, not a failure — otherwise
+            // yesterday's count would carry past midnight.
+            guard HealthKitManager.isUsable(error) else {
+                DispatchQueue.main.async { completion(false) }
                 return
             }
+            let steps = result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
             DispatchQueue.main.async {
-                self.currentSteps = sum.doubleValue(for: HKUnit.count())
+                guard let self else { return completion(false) }
                 self.lastSync = Date()
+                if self.currentSteps != steps {
+                    self.currentSteps = steps
+                }
+                if let cache = self.priorDaysCache, cache.dayStart == startOfDay {
+                    self.setCumulative(cache.steps + Int(steps))
+                }
+                completion(true)
             }
         }
         healthStore.execute(query)
     }
 
+    /// True when a statistics query succeeded or merely found no samples.
+    private static func isUsable(_ error: Error?) -> Bool {
+        guard let error else { return true }
+        return (error as? HKError)?.code == .errorNoData
+    }
+
     /// Fetches per-day step totals for the last 7 days using HKStatisticsCollectionQuery.
     private func fetchDailyStepsLast7Days() {
-        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
         let calendar = Calendar.current
         let now = Date()
         let startOfToday = calendar.startOfDay(for: now)
         guard let sevenDaysAgo = calendar.date(byAdding: .day, value: -6, to: startOfToday) else { return }
 
-        let daily = DateComponents(day: 1)
-        let predicate = HKQuery.predicateForSamples(
-            withStart: sevenDaysAgo,
-            end: now,
-            options: .strictStartDate
-        )
-
+        let predicate = HKQuery.predicateForSamples(withStart: sevenDaysAgo, end: now, options: .strictStartDate)
         let query = HKStatisticsCollectionQuery(
             quantityType: stepType,
             quantitySamplePredicate: predicate,
             options: .cumulativeSum,
             anchorDate: sevenDaysAgo,
-            intervalComponents: daily
+            intervalComponents: DateComponents(day: 1)
         )
 
         query.initialResultsHandler = { [weak self] _, results, error in
-            guard let self = self else { return }
-
             if let error = error {
                 print("HealthKitManager: Failed to fetch daily steps: \(error)")
                 return
             }
-
             guard let results = results else { return }
 
             var dailyMap: [Date: Int] = [:]
-
             results.enumerateStatistics(from: sevenDaysAgo, to: now) { statistics, _ in
                 let day = calendar.startOfDay(for: statistics.startDate)
                 let steps = statistics.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
@@ -128,6 +147,7 @@ class HealthKitManager: ObservableObject {
             }
 
             DispatchQueue.main.async {
+                guard let self, self.dailyStepsLast7Days != dailyMap else { return }
                 self.dailyStepsLast7Days = dailyMap
             }
         }
@@ -135,93 +155,52 @@ class HealthKitManager: ObservableObject {
         healthStore.execute(query)
     }
 
-    // MARK: - Cumulative Step Tracking (v1.1)
+    // MARK: - Cumulative Step Tracking
 
-    /// Fetches cumulative steps since the given baseline date.
-    /// Uses caching to avoid expensive re-queries.
-    /// - Parameter baselineDate: Start date for cumulative counting (usually UserProfile.createdAt).
-    func fetchCumulativeSteps(since baselineDate: Date) {
-        // Check cache validity
-        if let cache = cumulativeCache,
-           Date().timeIntervalSince(cache.timestamp) < cacheDuration {
-            // Cache is valid, use cached value
-            return
-        }
-
-        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-        let now = Date()
-        let predicate = HKQuery.predicateForSamples(withStart: baselineDate, end: now, options: .strictStartDate)
-
-        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { [weak self] _, result, error in
-            guard let self = self else { return }
-
-            if let error = error {
-                print("HealthKitManager: Failed to fetch cumulative steps: \(error)")
-                return
-            }
-
-            guard let result = result, let sum = result.sumQuantity() else {
-                DispatchQueue.main.async {
-                    self.cumulativeSteps = 0
-                    self.cumulativeCache = (0, Date())
-                }
-                return
-            }
-
-            let total = Int(sum.doubleValue(for: HKUnit.count()))
-            DispatchQueue.main.async {
-                self.cumulativeSteps = total
-                self.cumulativeCache = (total, Date())
-                self.lastSync = Date()
-            }
-        }
-        healthStore.execute(query)
-    }
-
-    /// Forces a refresh of cumulative steps, bypassing cache.
-    /// - Parameter baselineDate: Start date for cumulative counting.
-    func refreshCumulativeSteps(since baselineDate: Date) {
-        cumulativeCache = nil
-        fetchCumulativeSteps(since: baselineDate)
-    }
-
-    /// Async version of cumulative step fetch.
-    /// - Parameter baselineDate: Start date for cumulative counting.
-    /// - Returns: Total cumulative steps.
+    /// Total steps since `baselineDate`: a per-day cached sum of prior days plus today's live count.
+    @MainActor
     func fetchCumulativeStepsAsync(since baselineDate: Date) async -> Int {
-        // Check cache validity
-        if let cache = cumulativeCache,
-           Date().timeIntervalSince(cache.timestamp) < cacheDuration {
-            return cache.steps
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+
+        if let cache = priorDaysCache, cache.dayStart == startOfToday {
+            let total = cache.steps + Int(currentSteps)
+            setCumulative(total)
+            return total
         }
 
-        return await withCheckedContinuation { continuation in
-            let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-            let now = Date()
-            let predicate = HKQuery.predicateForSamples(withStart: baselineDate, end: now, options: .strictStartDate)
+        guard baselineDate < startOfToday else { return Int(currentSteps) }
+        let predicate = HKQuery.predicateForSamples(withStart: baselineDate, end: startOfToday, options: .strictStartDate)
+        let type = stepType
 
-            let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { [weak self] _, result, _ in
-                guard let sum = result?.sumQuantity() else {
-                    continuation.resume(returning: 0)
+        let prior: Int? = await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, error in
+                // Don't cache real failures (e.g. protected data while locked); retry next time.
+                guard HealthKitManager.isUsable(error) else {
+                    continuation.resume(returning: nil)
                     return
                 }
-
-                let total = Int(sum.doubleValue(for: HKUnit.count()))
-
-                DispatchQueue.main.async {
-                    self?.cumulativeSteps = total
-                    self?.cumulativeCache = (total, Date())
-                    self?.lastSync = Date()
-                }
-
-                continuation.resume(returning: total)
+                let steps = result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
+                continuation.resume(returning: Int(steps))
             }
             healthStore.execute(query)
         }
+
+        guard let prior else { return Int(currentSteps) }
+        priorDaysCache = (startOfToday, prior)
+        let total = prior + Int(currentSteps)
+        setCumulative(total)
+        return total
     }
 
     /// Invalidates the cumulative cache (call when user pulls to refresh).
     func invalidateCache() {
-        cumulativeCache = nil
+        priorDaysCache = nil
+        lastFetch = .distantPast
+    }
+
+    private func setCumulative(_ total: Int) {
+        if cumulativeSteps != total {
+            cumulativeSteps = total
+        }
     }
 }

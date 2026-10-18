@@ -32,6 +32,9 @@ class StoreManager: ObservableObject {
     private var updateListenerTask: Task<Void, Error>?
 
     private init() {
+        // Seed from the last verified state so premium UI doesn't flicker at launch;
+        // updatePurchasedProducts() re-derives it from StoreKit right after.
+        isPremium = PersistenceManager.shared.entitlements.isPremium
         // Start listening for transactions (lightweight, non-blocking)
         updateListenerTask = listenForTransactions()
         // Products loaded on demand via setup() to avoid blocking app launch
@@ -147,6 +150,10 @@ class StoreManager: ObservableObject {
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
+
+                // Refunded/revoked transactions don't grant access. (Expired ones are already
+                // excluded by currentEntitlements, which keeps billing-grace-period subscriptions.)
+                guard transaction.revocationDate == nil else { continue }
 
                 // Check if this is one of our subscription products
                 if ProductID(rawValue: transaction.productID) != nil {

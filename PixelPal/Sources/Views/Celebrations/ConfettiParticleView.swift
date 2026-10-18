@@ -1,18 +1,20 @@
 import SwiftUI
 
 /// Sparkle particle system — ambient golden sparkles instead of confetti.
-/// Uses Canvas + TimelineView for smooth 60fps rendering.
+/// Uses Canvas + TimelineView for smooth 60fps rendering; a single still frame under Reduce Motion.
 struct SparkleParticleView: View {
     let accentColor: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var particles: [Sparkle] = []
     @State private var startTime: Date = .now
 
     private let particleCount = 24
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { timeline in
             Canvas { context, size in
-                let elapsed = timeline.date.timeIntervalSince(startTime)
+                // Under Reduce Motion, draw one frozen moment where every sparkle is visible.
+                let elapsed = reduceMotion ? 3.0 : timeline.date.timeIntervalSince(startTime)
 
                 for particle in particles {
                     let age = elapsed - particle.delay
@@ -82,6 +84,7 @@ struct SparkleParticleView: View {
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -104,8 +107,8 @@ private struct Sparkle {
 
         let colors: [Color] = [
             accentColor,
-            Color(red: 1.0, green: 0.84, blue: 0.0),
-            Color(red: 1.0, green: 0.6, blue: 0.0),
+            Theme.gold,
+            Theme.amber,
             .white
         ]
         color = colors.randomElement() ?? accentColor

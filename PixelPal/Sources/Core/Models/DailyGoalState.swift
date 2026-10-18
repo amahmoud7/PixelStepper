@@ -23,12 +23,8 @@ struct DailyGoalState: Codable, Equatable, Identifiable {
     
     /// Creates a new daily goal state.
     static func create(for date: Date, steps: Int = 0, goal: Int = 7500) -> DailyGoalState {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
-        
-        return DailyGoalState(
-            dateString: formatter.string(from: date),
+        DailyGoalState(
+            dateString: dayKey(for: date),
             date: date,
             steps: steps,
             goal: goal,
@@ -42,12 +38,23 @@ struct DailyGoalState: Codable, Equatable, Identifiable {
         isGoalMet = newSteps >= goal
     }
     
-    /// Date formatter for converting date strings.
-    private static let dateFormatter: DateFormatter = {
+    /// Shared "yyyy-MM-dd" formatter. Creating DateFormatters is expensive and this runs in loops.
+    /// Fixed Gregorian/POSIX so keys don't change with the user's calendar or numbering system.
+    private static let dayKeyFormatter: DateFormatter = {
         let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+
+    /// Day key used for history, missions and step moments. Main-thread callers only.
+    static func dayKey(for date: Date) -> String {
+        if dayKeyFormatter.timeZone != TimeZone.current {
+            dayKeyFormatter.timeZone = .current
+        }
+        return dayKeyFormatter.string(from: date)
+    }
 }
 
 // MARK: - Daily Goal Extensions

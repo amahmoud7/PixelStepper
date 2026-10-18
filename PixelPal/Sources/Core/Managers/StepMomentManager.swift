@@ -10,9 +10,7 @@ class StepMomentManager: ObservableObject {
     private let center = UNUserNotificationCenter.current()
 
     private var todayString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
+        DailyGoalState.dayKey(for: Date())
     }
 
     init() {
@@ -33,10 +31,7 @@ class StepMomentManager: ObservableObject {
 
         // Random hour between 10-20 (10am-8pm), deterministic from date
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let seed = formatter.string(from: tomorrow).hashValue
-        var rng = SeededRandomNumberGenerator(seed: UInt64(bitPattern: Int64(seed)))
+        var rng = SeededRandomNumberGenerator(string: DailyGoalState.dayKey(for: tomorrow))
         let hour = Int.random(in: 10...19, using: &rng)
         let minute = Int.random(in: 0...59, using: &rng)
 

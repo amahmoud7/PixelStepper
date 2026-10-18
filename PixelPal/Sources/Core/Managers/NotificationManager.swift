@@ -37,9 +37,12 @@ final class NotificationManager {
         scheduleWeeklySummary()
     }
 
-    /// Removes all pending notifications and reschedules.
+    /// Identifiers of the recurring notifications owned by `scheduleAll()`.
+    private let recurringIdentifiers = ["daily_morning", "daily_evening", "mission_reminder", "weekly_summary"]
+
+    /// Reschedules the recurring notifications. One-shot ones (streak, re-engagement, step moment) are left alone.
     func refreshSchedule() {
-        center.removeAllPendingNotificationRequests()
+        center.removePendingNotificationRequests(withIdentifiers: recurringIdentifiers)
         scheduleAll()
     }
 
@@ -87,8 +90,8 @@ final class NotificationManager {
         center.removePendingNotificationRequests(withIdentifiers: ["reengagement"])
 
         let content = UNMutableNotificationContent()
-        content.title = "Your Stepper misses you"
-        content.body = "Your character's energy is dropping. Come back and take a walk!"
+        content.title = "Your Stepper is ready for a walk"
+        content.body = "Even a few minutes outside gives your character a boost."
         content.sound = .default
 
         // 2 days from now
@@ -124,13 +127,17 @@ final class NotificationManager {
         center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
 
         guard streak > 0, stepsRemaining > 0 else { return }
+        // A non-repeating 6 PM trigger scheduled after 6 PM would fire tomorrow with stale numbers.
+        let now = Date()
+        guard Calendar.current.component(.hour, from: now) < 18 else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "Your \(streak)-day streak needs saving!"
-        content.body = "\(stepsRemaining.formatted()) more steps to go. A 20-min walk will save it."
+        content.title = "Keep your \(streak)-day streak going"
+        // Generic body: no step counts on the lock screen.
+        content.body = "A short walk this evening keeps it alive."
         content.sound = .default
 
-        var dateComponents = DateComponents()
+        var dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: now)
         dateComponents.hour = 18
         dateComponents.minute = 0
 
@@ -144,7 +151,7 @@ final class NotificationManager {
     /// Schedules a daily mission reminder at 2 PM.
     private func scheduleMissionReminder() {
         let content = UNMutableNotificationContent()
-        content.title = "3 missions waiting"
+        content.title = "Your daily missions are waiting"
         content.body = "Check today's challenges — your character is counting on you!"
         content.sound = .default
 

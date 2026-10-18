@@ -27,12 +27,14 @@ class HistoryManager: ObservableObject {
     
     private init() {
         // Load history from persistence
-        self.history = persistence.dailyHistory ?? DailyHistory.createNew()
+        var loaded = persistence.dailyHistory ?? DailyHistory.createNew()
+        if loaded.normalizeDayKeys() {
+            persistence.saveDailyHistory(loaded)
+        }
+        self.history = loaded
         
         // Initialize today state
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        self.lastProcessedDay = formatter.string(from: Date())
+        self.lastProcessedDay = DailyGoalState.dayKey(for: Date())
         self.todayState = history.state(for: Date())
         
         // Setup day change monitoring
@@ -53,7 +55,6 @@ class HistoryManager: ObservableObject {
         persistence.saveDailyHistory(history)
         
         // Update shared data
-        SharedData.saveDailyHistory(history)
     }
     
     /// Records a complete day (for backfill scenarios).
@@ -66,7 +67,6 @@ class HistoryManager: ObservableObject {
         }
         
         persistence.saveDailyHistory(history)
-        SharedData.saveDailyHistory(history)
     }
     
     /// Refreshes history and handles day changes.
@@ -76,9 +76,7 @@ class HistoryManager: ObservableObject {
         let today = calendar.startOfDay(for: now)
         
         // Check if day changed
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let currentDayString = formatter.string(from: now)
+        let currentDayString = DailyGoalState.dayKey(for: now)
         
         if currentDayString != lastProcessedDay {
             // Day changed - ensure yesterday is finalized
@@ -96,7 +94,6 @@ class HistoryManager: ObservableObject {
         
         // Persist
         persistence.saveDailyHistory(history)
-        SharedData.saveDailyHistory(history)
     }
     
     /// Gets the last 7 days for week memory view.
@@ -179,7 +176,6 @@ class HistoryManager: ObservableObject {
         }
         
         persistence.saveDailyHistory(history)
-        SharedData.saveDailyHistory(history)
     }
     
     /// Gets goal status for a specific date.

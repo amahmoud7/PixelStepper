@@ -30,6 +30,7 @@ final class ShareDestinationManager {
         ]]
 
         UIPasteboard.general.setItems(items, options: [
+            .localOnly: true,
             .expirationDate: Date().addingTimeInterval(300)
         ])
 
@@ -47,6 +48,7 @@ final class ShareDestinationManager {
         ]]
 
         UIPasteboard.general.setItems(items, options: [
+            .localOnly: true,
             .expirationDate: Date().addingTimeInterval(300)
         ])
 
@@ -70,6 +72,7 @@ final class ShareDestinationManager {
         ]]
 
         UIPasteboard.general.setItems(items, options: [
+            .localOnly: true,
             .expirationDate: Date().addingTimeInterval(300)
         ])
 
@@ -89,6 +92,7 @@ final class ShareDestinationManager {
         ]]
 
         UIPasteboard.general.setItems(items, options: [
+            .localOnly: true,
             .expirationDate: Date().addingTimeInterval(300)
         ])
 

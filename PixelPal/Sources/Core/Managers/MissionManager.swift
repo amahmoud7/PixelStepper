@@ -10,9 +10,7 @@ class MissionManager: ObservableObject {
     private let dailyGoal = 7500
 
     private var todayString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
+        DailyGoalState.dayKey(for: Date())
     }
 
     private var weekString: String {
@@ -114,8 +112,8 @@ class MissionManager: ObservableObject {
 
     private func generateMissions(weeklyAverage: Int, isPremium: Bool) -> [DailyMission] {
         // Use date-based seed for deterministic generation
-        let seed = todayString.hashValue
-        var rng = SeededRandomNumberGenerator(seed: UInt64(bitPattern: Int64(seed)))
+        // String.hashValue is randomized per launch; use a stable hash so missions don't reshuffle.
+        var rng = SeededRandomNumberGenerator(string: todayString)
 
         var types = MissionType.allCases.shuffled(using: &rng)
         let missionCount = isPremium ? 5 : 3
@@ -192,8 +190,7 @@ class MissionManager: ObservableObject {
     }
 
     private func generateWeeklyChallenge(weeklyAverage: Int) -> WeeklyChallenge {
-        let seed = weekString.hashValue
-        var rng = SeededRandomNumberGenerator(seed: UInt64(bitPattern: Int64(seed)))
+        var rng = SeededRandomNumberGenerator(string: weekString)
         let types = WeeklyChallengeType.allCases
         let type = types[Int.random(in: 0..<types.count, using: &rng)]
 
@@ -305,6 +302,16 @@ struct SeededRandomNumberGenerator: RandomNumberGenerator {
 
     init(seed: UInt64) {
         state = seed == 0 ? 1 : seed
+    }
+
+    /// Deterministic across launches (FNV-1a), unlike `String.hashValue`.
+    init(string: String) {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        self.init(seed: hash)
     }
 
     mutating func next() -> UInt64 {

@@ -4,31 +4,24 @@ import StoreKit
 /// Premium paywall — accessible from any phase, aspirational messaging.
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var storeManager: StoreManager
     @State private var selectedProduct: Product?
     @State private var isPurchasing: Bool = false
+    @State private var isRestoring: Bool = false
     @State private var showError: Bool = false
+    @State private var errorTitle: String = "Purchase didn't go through"
+    @State private var showNothingToRestore: Bool = false
     @State private var isTrialEligible: Bool = false
     @State private var appeared = false
 
     let gender: Gender
     var currentPhase: Int = 1
 
-    private let purple = Color(red: 0.49, green: 0.36, blue: 0.99)
-    private let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
-
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.02, blue: 0.15),
-                    Color(red: 0.10, green: 0.04, blue: 0.22),
-                    Color(red: 0.05, green: 0.02, blue: 0.15)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            Theme.backgroundGradient
+                .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -37,35 +30,39 @@ struct PaywallView: View {
                         Spacer()
                         Button(action: { dismiss() }) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 26))
-                                .foregroundColor(.white.opacity(0.3))
+                                .font(.ppTitle)
+                                .foregroundColor(Theme.textTertiary)
+                                .minTapTarget()
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Close")
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
+                    .padding(.horizontal, Space.m)
+                    .padding(.top, Space.s)
 
-                    Spacer().frame(height: 12)
+                    Spacer().frame(height: Space.xs)
 
                     // Evolution timeline
                     EvolutionTimeline(gender: gender, currentPhase: currentPhase)
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 16)
 
-                    Spacer().frame(height: 24)
+                    Spacer().frame(height: Space.xl)
 
                     // Title — dynamic based on phase
                     Text(headlineText)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(.ppTitle)
+                        .foregroundColor(Theme.textPrimary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, Space.xl)
                         .opacity(appeared ? 1 : 0)
+                        .accessibilityAddTraits(.isHeader)
 
-                    Spacer().frame(height: 8)
+                    Spacer().frame(height: Space.s)
 
                     Text(subtitleText)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
+                        .font(.ppBody)
+                        .foregroundColor(Theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                         .opacity(appeared ? 1 : 0)
@@ -74,66 +71,71 @@ struct PaywallView: View {
 
                     // Benefits
                     VStack(spacing: 0) {
-                        BenefitRow(icon: "sparkles", color: .orange,
-                                   title: "All 4 Evolution Phases",
+                        BenefitRow(icon: "sparkles", color: Theme.amber,
+                                   title: "All 4 evolution phases",
                                    desc: "Unlock Thriving & Legendary forms")
-                        BenefitRow(icon: "target", color: Color(red: 0.2, green: 0.78, blue: 0.35),
-                                   title: "5 Daily Missions",
+                        BenefitRow(icon: "target", color: Theme.mint,
+                                   title: "5 daily missions",
                                    desc: "More challenges, more coins")
-                        BenefitRow(icon: "snowflake", color: cyan,
-                                   title: "Streak Freeze",
+                        BenefitRow(icon: "snowflake", color: Theme.cyan,
+                                   title: "Streak freeze",
                                    desc: "Protect your streak once per week")
-                        BenefitRow(icon: "paintpalette.fill", color: purple,
-                                   title: "Premium Share Cards",
+                        BenefitRow(icon: "paintpalette.fill", color: Theme.purpleText,
+                                   title: "Premium share cards",
                                    desc: "Exclusive backgrounds & styles")
-                        BenefitRow(icon: "2.circle.fill", color: Color(red: 1.0, green: 0.84, blue: 0.0),
-                                   title: "2x Step Coins",
+                        BenefitRow(icon: "2.circle.fill", color: Theme.gold,
+                                   title: "2x step coins",
                                    desc: "Double coins from all rewards")
-                        BenefitRow(icon: "trophy.fill", color: .orange,
-                                   title: "Weekly Challenge",
+                        BenefitRow(icon: "trophy.fill", color: Theme.amber,
+                                   title: "Weekly challenge",
                                    desc: "Exclusive big goal with 500+ coin reward")
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, Space.screen)
 
                     Spacer().frame(height: 28)
 
                     // Subscription options
                     if storeManager.isLoading {
-                        VStack(spacing: 12) {
+                        VStack(spacing: Space.m) {
                             ProgressView()
                                 .tint(.white)
-                            Text("Loading plans...")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.white.opacity(0.4))
+                            Text("Loading plans…")
+                                .font(.ppRowTitle)
+                                .foregroundColor(Theme.textTertiary)
                         }
-                        .padding(.vertical, 20)
+                        .padding(.vertical, Space.screen)
                     } else if storeManager.products.isEmpty {
-                        VStack(spacing: 12) {
+                        VStack(spacing: Space.m) {
                             Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 24))
-                                .foregroundColor(.yellow.opacity(0.7))
+                                .font(.ppStat)
+                                .foregroundColor(Theme.amber)
+                                .accessibilityHidden(true)
                             Text("Unable to load subscription plans")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.7))
+                                .font(.ppBody.weight(.semibold))
+                                .foregroundColor(Theme.textSecondary)
+                                .multilineTextAlignment(.center)
                             Text("Please check your internet connection and try again.")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.4))
+                                .font(.ppCaption)
+                                .foregroundColor(Theme.textTertiary)
                                 .multilineTextAlignment(.center)
                             Button(action: {
+                                Haptics.soft()
                                 Task { await storeManager.loadProducts() }
                             }) {
                                 Text("Retry")
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                                    .foregroundColor(purple)
-                                    .padding(.horizontal, 24)
+                                    .font(.ppBody.weight(.bold))
+                                    .foregroundColor(Theme.purpleText)
+                                    .padding(.horizontal, Space.xl)
                                     .padding(.vertical, 10)
                                     .background(
                                         Capsule()
-                                            .stroke(purple.opacity(0.5), lineWidth: 1.5)
+                                            .stroke(Theme.purple.opacity(0.5), lineWidth: 1.5)
                                     )
+                                    .minTapTarget()
                             }
+                            .buttonStyle(PPPressableStyle())
                         }
-                        .padding(.vertical, 20)
+                        .padding(.vertical, Space.screen)
                         .padding(.horizontal, 32)
                     } else {
                         VStack(spacing: 10) {
@@ -142,7 +144,7 @@ struct PaywallView: View {
                                     product: yearly,
                                     isSelected: selectedProduct?.id == yearly.id,
                                     badge: "BEST VALUE",
-                                    badgeColor: Color(red: 0.2, green: 0.78, blue: 0.35)
+                                    badgeColor: Theme.mint
                                 ) {
                                     selectedProduct = yearly
                                 }
@@ -159,88 +161,90 @@ struct PaywallView: View {
                                 }
                             }
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, Space.screen)
                     }
 
-                    Spacer().frame(height: 24)
+                    Spacer().frame(height: Space.xl)
 
                     // Purchase CTA
                     if !storeManager.products.isEmpty {
-                        Button(action: {
-                            let impact = UIImpactFeedbackGenerator(style: .medium)
-                            impact.impactOccurred()
+                        Button {
+                            Haptics.prepare()
+                            Haptics.tap()
                             purchase()
-                        }) {
+                        } label: {
                             if isPurchasing {
                                 ProgressView()
                                     .tint(.white)
                             } else {
                                 Text(purchaseButtonTitle)
-                                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
                             }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            LinearGradient(
-                                colors: selectedProduct != nil
-                                    ? [purple, cyan.opacity(0.8)]
-                                    : [Color.white.opacity(0.15), Color.white.opacity(0.1)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(16)
-                        .shadow(color: selectedProduct != nil ? purple.opacity(0.4) : .clear, radius: 16, y: 6)
+                        .buttonStyle(PPPrimaryButtonStyle(
+                            colors: selectedProduct != nil
+                                ? [Theme.purple, Theme.purpleDeep]
+                                : [Theme.surfaceStrong, Theme.surface]
+                        ))
                         .disabled(selectedProduct == nil || isPurchasing)
                         .padding(.horizontal, 32)
                     }
 
-                    Spacer().frame(height: 16)
+                    Spacer().frame(height: Space.s)
 
                     // Restore
                     Button(action: restore) {
-                        Text("Restore Purchases")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
+                        Text("Restore purchases")
+                            .font(.ppBody)
+                            .foregroundColor(Theme.textSecondary)
+                            .padding(.horizontal, Space.s)
+                            .minTapTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRestoring)
+                    // Attached here (not on the root) so it never competes with the purchase error alert.
+                    .alert("No purchases to restore", isPresented: $showNothingToRestore) {
+                        Button("OK") { }
+                    } message: {
+                        Text("We couldn't find an active Premium subscription for this Apple ID.")
                     }
 
-                    Spacer().frame(height: 12)
+                    Spacer().frame(height: Space.xs)
 
                     // Terms
-                    Text(isTrialEligible
+                    Text(showsTrial
                          ? "Free trial starts immediately. Cancel anytime. Auto-renews unless cancelled 24 hours before period end."
                          : "Cancel anytime. Auto-renews unless cancelled 24 hours before period end.")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                        .font(.ppCaption)
+                        .foregroundColor(Theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
 
-                    Spacer().frame(height: 8)
+                    Spacer().frame(height: Space.xs)
 
                     // Privacy & Terms links
-                    HStack(spacing: 16) {
+                    HStack(spacing: Space.l) {
                         Link("Privacy Policy", destination: URL(string: "https://github.com/amahmoud7/PixelStepper/blob/main/PRIVACY_POLICY.md")!)
+                            .frame(minHeight: 44)
                         Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                            .frame(minHeight: 44)
                     }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.ppCaption)
+                    .foregroundColor(Theme.textSecondary)
 
                     Spacer().frame(height: 40)
                 }
             }
         }
-        .alert("Error", isPresented: $showError) {
+        .alert(errorTitle, isPresented: $showError) {
             Button("OK") { }
         } message: {
-            Text(storeManager.errorMessage ?? "An error occurred.")
+            Text(storeManager.errorMessage ?? "Something went wrong. Please try again.")
         }
         .onAppear {
             if selectedProduct == nil {
                 selectedProduct = storeManager.yearlyProduct
             }
-            withAnimation(.easeOut(duration: 0.5)) {
+            withMotion(Motion.smooth, reduceMotion: reduceMotion) {
                 appeared = true
             }
         }
@@ -281,12 +285,18 @@ struct PaywallView: View {
         }
     }
 
+    /// True only when the selected plan actually has a free trial the user can claim.
+    private var showsTrial: Bool {
+        isTrialEligible && selectedProduct.flatMap { storeManager.trialDescription(for: $0) } != nil
+    }
+
     private var purchaseButtonTitle: String {
         guard isTrialEligible, let product = selectedProduct,
               let trialText = storeManager.trialDescription(for: product) else {
             return "Unlock Premium"
         }
-        return "Start \(trialText) Free Trial"
+        // trialDescription already ends in " free" ("1 week free").
+        return "Start your \(trialText.replacingOccurrences(of: " free", with: "")) free trial"
     }
 
     // MARK: - Actions
@@ -294,27 +304,45 @@ struct PaywallView: View {
     private func purchase() {
         guard let product = selectedProduct else { return }
         isPurchasing = true
+        // Clear any stale error so a user cancel isn't reported as a failure.
+        storeManager.errorMessage = nil
 
         Task {
             let success = await storeManager.purchase(product)
             isPurchasing = false
 
             if success {
+                Haptics.success()
                 PersistenceManager.shared.updateProgress { progress in
                     progress.hasSeenPaywall = true
                 }
                 dismiss()
             } else if storeManager.errorMessage != nil {
+                Haptics.error()
+                errorTitle = "Purchase didn't go through"
                 showError = true
             }
         }
     }
 
     private func restore() {
+        Haptics.soft()
+        isRestoring = true
+        storeManager.errorMessage = nil
         Task {
             await storeManager.restorePurchases()
+            isRestoring = false
             if storeManager.isPremium {
+                Haptics.success()
                 dismiss()
+            } else if storeManager.errorMessage != nil {
+                // Restore itself failed (e.g. offline): show the real error.
+                Haptics.error()
+                errorTitle = "Couldn't restore purchases"
+                showError = true
+            } else {
+                Haptics.warning()
+                showNothingToRestore = true
             }
         }
     }
@@ -341,24 +369,17 @@ private struct EvolutionTimeline: View {
                     // Connector line
                     Rectangle()
                         .fill(phase < currentPhase
-                            ? phaseColor(for: phase).opacity(0.5)
-                            : Color.white.opacity(0.08))
+                            ? Theme.phaseColor(phase).opacity(0.5)
+                            : Theme.stroke)
                         .frame(height: 2)
                         .frame(maxWidth: .infinity)
+                        .accessibilityHidden(true)
                 }
             }
         }
-        .padding(.horizontal, 24)
-    }
-
-    private func phaseColor(for phase: Int) -> Color {
-        switch phase {
-        case 1: return .gray
-        case 2: return Color(red: 0.0, green: 0.48, blue: 1.0)
-        case 3: return Color(red: 0.49, green: 0.36, blue: 0.99)
-        case 4: return Color(red: 1.0, green: 0.6, blue: 0.0)
-        default: return .gray
-        }
+        .padding(.horizontal, Space.xl)
+        // Nodes are fixed 52pt circles; keep their labels from overflowing.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
 
@@ -369,16 +390,10 @@ private struct PhaseNode: View {
     let isUnlocked: Bool
     let isPremiumLocked: Bool
 
-    @State private var pulseScale: CGFloat = 1.0
+    @State private var pulsing = false
 
     private var phaseColor: Color {
-        switch phase {
-        case 1: return .gray
-        case 2: return Color(red: 0.0, green: 0.48, blue: 1.0)
-        case 3: return Color(red: 0.49, green: 0.36, blue: 0.99)
-        case 4: return Color(red: 1.0, green: 0.6, blue: 0.0)
-        default: return .gray
-        }
+        Theme.phaseColor(phase)
     }
 
     private var avatarState: AvatarState {
@@ -398,14 +413,15 @@ private struct PhaseNode: View {
                     Circle()
                         .stroke(phaseColor.opacity(0.4), lineWidth: 2)
                         .frame(width: 58, height: 58)
-                        .scaleEffect(pulseScale)
+                        .scaleEffect(pulsing ? 1.1 : 1.0)
+                        .ambientLoop($pulsing, animation: Motion.ambient(1.5))
                 }
 
                 Circle()
                     .fill(phaseColor.opacity(isUnlocked ? 0.2 : 0.06))
                     .frame(width: 52, height: 52)
 
-                Image(SpriteAssets.spriteName(gender: gender, state: avatarState, frame: 1))
+                Image(decorative: SpriteAssets.spriteName(gender: gender, state: avatarState, frame: 1))
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
@@ -419,39 +435,35 @@ private struct PhaseNode: View {
                         HStack {
                             Spacer()
                             Image(systemName: "crown.fill")
-                                .font(.system(size: 8))
-                                .foregroundColor(.yellow)
+                                .font(.ppMicro)
+                                .imageScale(.small)
+                                .foregroundColor(Theme.gold)
                                 .padding(3)
                                 .background(
                                     Circle()
                                         .fill(Color(red: 0.15, green: 0.1, blue: 0.25))
                                 )
-                            }
+                        }
                     }
                     .frame(width: 52, height: 52)
                 }
             }
 
-            Text(phaseName)
-                .font(.system(size: 9, weight: isCurrent ? .bold : .medium))
-                .foregroundColor(isCurrent ? .white : .white.opacity(0.35))
+            Text(Theme.phaseName(phase))
+                .font(Font.ppMicro.weight(isCurrent ? .bold : .medium))
+                .foregroundColor(isCurrent ? Theme.textPrimary : Theme.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .onAppear {
-            guard isCurrent else { return }
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                pulseScale = 1.1
-            }
-        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
     }
 
-    private var phaseName: String {
-        switch phase {
-        case 1: return "Seedling"
-        case 2: return "Growing"
-        case 3: return "Thriving"
-        case 4: return "Legendary"
-        default: return ""
-        }
+    private var accessibilityText: String {
+        var text = "Phase \(phase), \(Theme.phaseName(phase))"
+        if isCurrent { text += ", current" }
+        if !isUnlocked && isPremiumLocked { text += ", Premium" }
+        return text
     }
 }
 
@@ -463,29 +475,33 @@ private struct BenefitRow: View {
     let title: String
     let desc: String
 
+    @ScaledMetric(relativeTo: .subheadline) private var iconBox: CGFloat = 32
+
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(.ppBody)
                 .foregroundColor(color)
-                .frame(width: 32, height: 32)
+                .frame(width: iconBox, height: iconBox)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
                         .fill(color.opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.ppBody.weight(.semibold))
+                    .foregroundColor(Theme.textPrimary)
                 Text(desc)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
+                    .font(.ppMicro)
+                    .foregroundColor(Theme.textSecondary)
             }
 
             Spacer()
         }
         .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -498,16 +514,11 @@ private struct PlanCard: View {
     let badgeColor: Color
     let action: () -> Void
 
-    private let purple = Color(red: 0.49, green: 0.36, blue: 0.99)
-
     private var perMonthText: String? {
         guard let subscription = product.subscription,
               subscription.subscriptionPeriod.unit == .year else { return nil }
-        let monthly = product.price / 12
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.locale = Locale.current
-        return formatter.string(from: monthly as NSDecimalNumber)
+        // Storefront currency, not the device locale.
+        return (product.price / 12).formatted(product.priceFormatStyle)
     }
 
     private var priceWithPeriod: String {
@@ -521,21 +532,21 @@ private struct PlanCard: View {
 
     var body: some View {
         Button(action: {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
+            Haptics.select()
             action()
         }) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    HStack(spacing: Space.s) {
                         Text(product.displayName)
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .font(.ppBody.weight(.bold))
+                            .foregroundColor(Theme.textPrimary)
 
                         if let badge {
                             Text(badge)
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white)
+                                .font(.ppOverline)
+                                .tracking(0.5)
+                                .foregroundColor(.black)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
                                 .background(
@@ -546,30 +557,34 @@ private struct PlanCard: View {
 
                     if let perMonth = perMonthText {
                         Text("Just \(perMonth)/month")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(red: 0.2, green: 0.78, blue: 0.35))
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.mint)
                     } else {
                         Text(product.description)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.4))
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.textSecondary)
                     }
                 }
 
                 Spacer()
 
                 Text(priceWithPeriod)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.ppButton)
+                    .foregroundColor(Theme.textPrimary)
             }
-            .padding(16)
+            .padding(Space.l)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? purple.opacity(0.12) : Color.white.opacity(0.03))
+                RoundedRectangle(cornerRadius: Radius.button, style: .continuous)
+                    .fill(isSelected ? Theme.purple.opacity(0.12) : Theme.surface)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(isSelected ? purple.opacity(0.6) : Color.white.opacity(0.08), lineWidth: isSelected ? 2 : 1)
+                        RoundedRectangle(cornerRadius: Radius.button, style: .continuous)
+                            .stroke(isSelected ? Theme.purple.opacity(0.6) : Theme.stroke, lineWidth: isSelected ? 2 : 1)
                     )
             )
+            .motion(Motion.snappy, value: isSelected)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(PPPressableStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

@@ -30,18 +30,19 @@ class PersistenceManager: ObservableObject {
         static let cosmeticInventory = "CosmeticInventory.json"
     }
 
-    /// Application Support directory for this app.
-    private var appSupportURL: URL {
-        let urls = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-        let appSupport = (urls.first ?? URL(fileURLWithPath: NSTemporaryDirectory())).appendingPathComponent("PixelPal", isDirectory: true)
+    /// Application Support directory for this app (created once).
+    private static let directoryURL: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let dir = base.appendingPathComponent("PixelPal", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
 
-        // Create directory if needed
-        if !FileManager.default.fileExists(atPath: appSupport.path) {
-            try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
-        }
+    private var appSupportURL: URL { Self.directoryURL }
 
-        return appSupport
-    }
+    /// Serial queue so disk writes stay off the main thread but keep their order.
+    private let ioQueue = DispatchQueue(label: "com.pixelpalfit.persistence", qos: .utility)
 
     private init() {
         // Load existing data or create defaults
@@ -139,34 +140,47 @@ class PersistenceManager: ObservableObject {
 
     private func save<T: Encodable>(_ object: T, to fileName: String) {
         let url = appSupportURL.appendingPathComponent(fileName)
+        let data: Data
         do {
-            let data = try JSONEncoder().encode(object)
-            try data.write(to: url, options: .atomic)
+            data = try JSONEncoder().encode(object)
         } catch {
-            print("PersistenceManager: Failed to save \(fileName): \(error)")
+            print("PersistenceManager: Failed to encode \(fileName): \(error)")
+            return
+        }
+        ioQueue.async {
+            do {
+                // Readable after first unlock so HealthKit callbacks can save while the screen is locked.
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            } catch {
+                print("PersistenceManager: Failed to save \(fileName): \(error)")
+            }
         }
     }
 
     private static func load<T: Decodable>(_ fileName: String, as type: T.Type) -> T? {
-        let urls = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-        guard let baseURL = urls.first else { return nil }
-        let url = baseURL
-            .appendingPathComponent("PixelPal", isDirectory: true)
-            .appendingPathComponent(fileName)
-
+        let url = directoryURL.appendingPathComponent(fileName)
         guard let data = try? Data(contentsOf: url) else { return nil }
 
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
-            print("PersistenceManager: Failed to load \(fileName): \(error)")
+            // Keep the unreadable file so a schema mistake never silently destroys progress.
+            let backup = url.deletingPathExtension()
+                .appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).json")
+            try? FileManager.default.copyItem(at: url, to: backup)
+            print("PersistenceManager: Failed to load \(fileName), backed up: \(error)")
             return nil
         }
     }
 
+    /// Blocks until queued writes are on disk. Call when the app is about to resign active.
+    func flush() {
+        ioQueue.sync {}
+    }
+
     private func delete(_ fileName: String) {
         let url = appSupportURL.appendingPathComponent(fileName)
-        try? FileManager.default.removeItem(at: url)
+        ioQueue.async { try? FileManager.default.removeItem(at: url) }
     }
 
     // MARK: - Legacy Migration

@@ -1,40 +1,46 @@
 import SwiftUI
 
-/// 30-day heatmap grid using DailyHistory data (green/red/gray squares).
+/// 30-day heatmap grid using DailyHistory data (goal met / below goal / no data squares).
 struct MonthCalendarView: View {
-    @StateObject private var historyManager = HistoryManager.shared
+    @ObservedObject private var historyManager = HistoryManager.shared
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
     var body: some View {
-        VStack(spacing: 12) {
+        let days = calendarDays
+
+        VStack(spacing: Space.m) {
             HStack {
-                Text("30-Day Activity")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                Text("30-day activity")
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 legendDots
             }
 
             // Day-of-week headers
             HStack(spacing: 4) {
-                ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
+                ForEach(Array(Calendar.current.veryShortStandaloneWeekdaySymbols.enumerated()), id: \.offset) { _, day in
                     Text(day)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.gray)
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textTertiary)
                         .frame(maxWidth: .infinity)
                 }
             }
+            .accessibilityHidden(true)
 
             // Calendar grid
             LazyVGrid(columns: columns, spacing: 4) {
                 // Leading spacer cells to align with weekday
-                ForEach(0..<leadingSpacers, id: \.self) { _ in
+                ForEach(0..<leadingSpacers(for: days), id: \.self) { _ in
                     Color.clear
                         .frame(height: 24)
+                        .accessibilityHidden(true)
                 }
 
-                ForEach(calendarDays, id: \.dateString) { day in
+                ForEach(days, id: \.dateString) { day in
                     calendarCell(for: day)
                 }
             }
@@ -54,12 +60,9 @@ struct MonthCalendarView: View {
             let state = historyManager.history.state(for: date)
             let isToday = offset == 0
 
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-
             days.append(CalendarDay(
                 date: date,
-                dateString: formatter.string(from: date),
+                dateString: DailyGoalState.dayKey(for: date),
                 dayNumber: calendar.component(.day, from: date),
                 steps: state?.steps ?? 0,
                 goalMet: state?.isGoalMet ?? false,
@@ -71,8 +74,9 @@ struct MonthCalendarView: View {
         return days
     }
 
-    private var leadingSpacers: Int {
-        guard let firstDay = calendarDays.first else { return 0 }
+    private func leadingSpacers(for days: [CalendarDay]) -> Int {
+        guard let firstDay = days.first else { return 0 }
+        // Headers start on Sunday (weekday 1), matching the symbol order above.
         let weekday = Calendar.current.component(.weekday, from: firstDay.date)
         return weekday - 1
     }
@@ -88,41 +92,56 @@ struct MonthCalendarView: View {
 
             if day.isToday {
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(Color.white.opacity(0.6), lineWidth: 1.5)
+                    .stroke(Theme.textSecondary, lineWidth: 1.5)
                     .frame(height: 24)
             }
 
+            // Fixed size: the cell is a fixed 24pt square.
             Text("\(day.dayNumber)")
-                .font(.system(size: 9, weight: day.isToday ? .bold : .medium))
-                .foregroundColor(day.hasData || day.isToday ? .white : .gray.opacity(0.6))
+                .font(.system(size: 11, weight: day.isToday ? .bold : .medium))
+                .foregroundColor(day.hasData || day.isToday ? Theme.textPrimary : Theme.textTertiary)
         }
+        .overlay(alignment: .topTrailing) {
+            // Met vs below goal must not rely on color alone.
+            if differentiateWithoutColor && day.goalMet {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 7, weight: .heavy))
+                    .foregroundColor(.white)
+                    .padding(2)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel(for: day))
+    }
+
+    private func accessibilityLabel(for day: CalendarDay) -> String {
+        let date = day.date.formatted(date: .abbreviated, time: .omitted)
+        let prefix = day.isToday ? "Today, \(date)" : date
+        return "\(prefix), \(day.steps.formatted()) steps\(day.goalMet ? ", goal met" : "")"
     }
 
     private func cellColor(for day: CalendarDay) -> Color {
         guard day.hasData || day.isToday else {
-            return Color.white.opacity(0.04)
+            return Theme.noData
         }
 
         if day.goalMet {
-            return Color(hex: "#34C759").opacity(day.isToday ? 0.8 : 0.6)
+            return Theme.goalMet.opacity(day.isToday ? 0.8 : 0.6)
         } else if day.steps > 0 {
-            let intensity = min(Double(day.steps) / 7500.0, 1.0)
-            if intensity > 0.5 {
-                return Color.yellow.opacity(0.4)
-            }
-            return Color(hex: "#FF3B30").opacity(0.3)
+            return Theme.belowGoal
         }
 
-        return Color.white.opacity(0.04)
+        return Theme.noData
     }
 
     // MARK: - Legend
 
     private var legendDots: some View {
-        HStack(spacing: 8) {
-            legendItem(color: Color(hex: "#34C759"), label: "Met")
-            legendItem(color: Color(hex: "#FF3B30").opacity(0.5), label: "Missed")
+        HStack(spacing: Space.s) {
+            legendItem(color: Theme.goalMet, label: "Met")
+            legendItem(color: Theme.belowGoal, label: "Below goal")
         }
+        .accessibilityElement(children: .combine)
     }
 
     private func legendItem(color: Color, label: String) -> some View {
@@ -131,8 +150,8 @@ struct MonthCalendarView: View {
                 .fill(color)
                 .frame(width: 8, height: 8)
             Text(label)
-                .font(.system(size: 9))
-                .foregroundColor(.gray)
+                .font(.ppMicro)
+                .foregroundColor(Theme.textTertiary)
         }
     }
 }

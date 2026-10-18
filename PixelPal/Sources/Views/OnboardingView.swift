@@ -4,14 +4,10 @@ import SwiftUI
 /// Rich gradients, large characters, staggered animations, branded CTAs.
 struct OnboardingView: View {
     @EnvironmentObject var healthManager: HealthKitManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentStep: Int = 1
     @State private var selectedGender: Gender? = nil
     @State private var selectedStyle: String = "default"
-
-    // Brand colors
-    static let purple = Color(red: 0.49, green: 0.36, blue: 0.99)
-    static let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
-    static let mint = Color(red: 0.2, green: 0.78, blue: 0.35)
 
     private var backgroundGradient: LinearGradient {
         let colors: [Color] = {
@@ -51,19 +47,26 @@ struct OnboardingView: View {
         )
     }
 
+    private var pageTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            )
+    }
+
     var body: some View {
         ZStack {
             backgroundGradient
                 .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.6), value: currentStep)
+                .motion(Motion.smooth, value: currentStep)
 
             VStack(spacing: 0) {
                 // Progress bar
                 OnboardingProgress(currentStep: currentStep, totalSteps: 4)
-                    .padding(.top, 16)
+                    .padding(.top, Space.l)
                     .padding(.horizontal, 48)
-
-                Spacer()
 
                 Group {
                     switch currentStep {
@@ -89,19 +92,80 @@ struct OnboardingView: View {
                         EmptyView()
                     }
                 }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
-
-                Spacer()
+                .transition(pageTransition)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        // Pages scroll, so allow large sizes; cap only the extreme accessibility sizes.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     private func nextStep() {
-        withAnimation(.easeInOut(duration: 0.35)) {
+        withMotion(Motion.smooth, reduceMotion: reduceMotion) {
             currentStep += 1
+        }
+    }
+}
+
+// MARK: - Page Layout
+
+/// Scrollable page body (centered when it fits) with the CTA pinned to the bottom,
+/// so nothing clips on small screens or at larger text sizes.
+private struct OnboardingPage<Content: View, Footer: View>: View {
+    let content: Content
+    let footer: Footer
+
+    init(@ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.content = content()
+        self.footer = footer()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            GeometryReader { geometry in
+                ScrollView(showsIndicators: false) {
+                    content
+                        .padding(.horizontal, Space.xl)
+                        .padding(.vertical, Space.l)
+                        .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+                }
+            }
+
+            footer
+                .padding(.top, Space.s)
+                .padding(.bottom, Space.xl)
+        }
+    }
+}
+
+/// Fade-and-slide entrance that skips the movement under Reduce Motion.
+private struct EntranceModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isVisible: Bool
+    let offset: CGFloat
+    let scale: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible || reduceMotion ? 0 : offset)
+            .scaleEffect(isVisible || reduceMotion ? 1 : scale)
+    }
+}
+
+private extension View {
+    func entrance(_ isVisible: Bool, offset: CGFloat = 0, scale: CGFloat = 1) -> some View {
+        modifier(EntranceModifier(isVisible: isVisible, offset: offset, scale: scale))
+    }
+
+    /// Toggles a two-frame sprite animation while the view is on screen.
+    func spriteFrameLoop(_ frame: Binding<Int>, every seconds: Double = Motion.spriteFrameInterval) -> some View {
+        let nanoseconds = UInt64(seconds * 1_000_000_000)
+        return task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: nanoseconds)
+                frame.wrappedValue = frame.wrappedValue == 1 ? 2 : 1
+            }
         }
     }
 }
@@ -112,23 +176,23 @@ private struct OnboardingProgress: View {
     let currentStep: Int
     let totalSteps: Int
 
-    private let purple = OnboardingView.purple
-
     var body: some View {
         HStack(spacing: 6) {
             ForEach(1...totalSteps, id: \.self) { step in
                 Capsule()
                     .fill(step <= currentStep
                         ? AnyShapeStyle(LinearGradient(
-                            colors: [purple, purple.opacity(0.7)],
+                            colors: [Theme.purple, Theme.purple.opacity(0.7)],
                             startPoint: .leading,
                             endPoint: .trailing
                           ))
                         : AnyShapeStyle(Color.white.opacity(0.15)))
                     .frame(height: 3)
-                    .animation(.easeInOut(duration: 0.3), value: currentStep)
+                    .motion(Motion.snappy, value: currentStep)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(currentStep) of \(totalSteps)")
     }
 }
 
@@ -145,112 +209,100 @@ private struct HookScreen: View {
     @State private var buttonAppeared = false
     @State private var glowPulse = false
 
-    private let frameTimer = Timer.publish(every: 0.8, on: .main, in: .common).autoconnect()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: 20)
-
-            // Large character display with glow
-            ZStack {
-                // Ambient glow behind characters
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                OnboardingView.purple.opacity(0.2),
-                                OnboardingView.purple.opacity(0.05),
-                                .clear
-                            ],
-                            center: .center,
-                            startRadius: 20,
-                            endRadius: 140
+        OnboardingPage {
+            VStack(spacing: 0) {
+                // Large character display with glow
+                ZStack {
+                    // Ambient glow behind characters
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Theme.purple.opacity(0.2),
+                                    Theme.purple.opacity(0.05),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 20,
+                                endRadius: 140
+                            )
                         )
-                    )
-                    .frame(width: 280, height: 280)
-                    .scaleEffect(glowPulse ? 1.05 : 0.95)
+                        .frame(width: 280, height: 280)
+                        .scaleEffect(glowPulse ? 1.05 : 0.95)
+                        .ambientLoop($glowPulse, animation: Motion.ambient())
 
-                HStack(spacing: 24) {
-                    Image(SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 120, height: 120)
+                    HStack(spacing: Space.xl) {
+                        Image(decorative: SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 120, height: 120)
 
-                    Image(SpriteAssets.spriteName(gender: .female, state: .vital, frame: animFrame))
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 120, height: 120)
+                        Image(decorative: SpriteAssets.spriteName(gender: .female, state: .vital, frame: animFrame))
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 120, height: 120)
+                    }
                 }
+                .frame(height: 240)
+                .entrance(appeared, scale: 0.6)
+                .spriteFrameLoop($animFrame)
+
+                Spacer().frame(height: Space.xl)
+
+                // Title
+                Text("Your steps tell a story")
+                    .font(.ppTitle)
+                    .foregroundColor(Theme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                    .entrance(titleAppeared, offset: 16)
+
+                Spacer().frame(height: Space.m)
+
+                // Subtitle
+                Text("A living character that walks with you on your Lock Screen all day.")
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .entrance(subtitleAppeared, offset: 12)
+
+                Spacer().frame(height: 28)
+
+                // Dynamic Island mock
+                DynamicIslandMock()
+                    .entrance(islandAppeared, scale: 0.8)
             }
-            .scaleEffect(appeared ? 1.0 : 0.6)
-            .opacity(appeared ? 1.0 : 0)
-            .onReceive(frameTimer) { _ in
-                animFrame = animFrame == 1 ? 2 : 1
-            }
-
-            Spacer().frame(height: 32)
-
-            // Title
-            Text("Your steps tell a story")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .opacity(titleAppeared ? 1 : 0)
-                .offset(y: titleAppeared ? 0 : 16)
-
-            Spacer().frame(height: 12)
-
-            // Subtitle
-            Text("A living character that walks with you\non your Lock Screen all day.")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .opacity(subtitleAppeared ? 1 : 0)
-                .offset(y: subtitleAppeared ? 0 : 12)
-
-            Spacer().frame(height: 28)
-
-            // Dynamic Island mock
-            DynamicIslandMock()
-                .opacity(islandAppeared ? 1 : 0)
-                .scaleEffect(islandAppeared ? 1 : 0.8)
-
-            Spacer()
-
-            // CTA
-            OnboardingCTA(title: "Start My Journey") {
+        } footer: {
+            OnboardingCTA(title: "Start my journey") {
                 onContinue()
             }
-            .opacity(buttonAppeared ? 1 : 0)
-            .offset(y: buttonAppeared ? 0 : 20)
-
-            Spacer().frame(height: 50)
+            .entrance(buttonAppeared, offset: 20)
         }
-        .padding(.horizontal, 24)
         .onAppear { staggerAnimations() }
     }
 
     private func staggerAnimations() {
-        withAnimation(.spring(response: 0.7, dampingFraction: 0.75)) {
+        withMotion(Motion.bouncy, reduceMotion: reduceMotion) {
             appeared = true
         }
-        withAnimation(.easeOut(duration: 0.5).delay(0.2)) {
+        withMotion(Motion.staggered(3), reduceMotion: reduceMotion) {
             titleAppeared = true
         }
-        withAnimation(.easeOut(duration: 0.5).delay(0.35)) {
+        withMotion(Motion.staggered(5), reduceMotion: reduceMotion) {
             subtitleAppeared = true
         }
-        withAnimation(.easeOut(duration: 0.5).delay(0.5)) {
+        withMotion(Motion.staggered(7), reduceMotion: reduceMotion) {
             islandAppeared = true
         }
-        withAnimation(.easeOut(duration: 0.5).delay(0.6)) {
+        withMotion(Motion.staggered(9), reduceMotion: reduceMotion) {
             buttonAppeared = true
-        }
-        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-            glowPulse = true
         }
     }
 }
@@ -264,88 +316,76 @@ private struct CharacterScreen: View {
     @State private var appeared = false
     @State private var cardsAppeared = false
     @State private var buttonAppeared = false
-    @State private var maleScale: CGFloat = 1.0
-    @State private var femaleScale: CGFloat = 1.0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: 20)
+        OnboardingPage {
+            VStack(spacing: 0) {
+                Text("Choose your character")
+                    .font(.ppTitle)
+                    .foregroundColor(Theme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                    .entrance(appeared, offset: 16)
 
-            Text("Choose your character")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
+                Spacer().frame(height: Space.s)
 
-            Spacer().frame(height: 8)
+                Text("They grow stronger every step you take")
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .entrance(appeared)
 
-            Text("They grow stronger every step you take")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
-                .opacity(appeared ? 1 : 0)
+                Spacer().frame(height: 40)
 
-            Spacer().frame(height: 40)
-
-            // Character cards
-            HStack(spacing: 20) {
-                CharacterCard(
-                    gender: .male,
-                    isSelected: selectedGender == .male,
-                    scale: maleScale
-                ) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                        selectedGender = .male
-                        maleScale = 1.08
-                        femaleScale = 1.0
+                // Character cards
+                HStack(spacing: Space.screen) {
+                    CharacterCard(
+                        gender: .male,
+                        isSelected: selectedGender == .male
+                    ) {
+                        select(.male)
                     }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7).delay(0.15)) {
-                        maleScale = 1.0
-                    }
-                }
 
-                CharacterCard(
-                    gender: .female,
-                    isSelected: selectedGender == .female,
-                    scale: femaleScale
-                ) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                        selectedGender = .female
-                        femaleScale = 1.08
-                        maleScale = 1.0
-                    }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7).delay(0.15)) {
-                        femaleScale = 1.0
+                    CharacterCard(
+                        gender: .female,
+                        isSelected: selectedGender == .female
+                    ) {
+                        select(.female)
                     }
                 }
+                .entrance(cardsAppeared, offset: 24)
             }
-            .opacity(cardsAppeared ? 1 : 0)
-            .offset(y: cardsAppeared ? 0 : 24)
-
-            Spacer()
-
+        } footer: {
             if selectedGender != nil {
                 OnboardingCTA(title: "Continue") {
                     onContinue()
                 }
-                .opacity(buttonAppeared ? 1 : 0)
-                .offset(y: buttonAppeared ? 0 : 20)
+                .entrance(buttonAppeared, offset: 20)
                 .onAppear {
-                    withAnimation(.easeOut(duration: 0.4)) {
+                    withMotion(Motion.smooth, reduceMotion: reduceMotion) {
                         buttonAppeared = true
                     }
                 }
+            } else {
+                // Reserve the CTA's height so the layout doesn't jump on selection.
+                Color.clear.frame(height: 52)
             }
-
-            Spacer().frame(height: 50)
         }
-        .padding(.horizontal, 24)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.5)) {
+            withMotion(Motion.smooth, reduceMotion: reduceMotion) {
                 appeared = true
             }
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.2)) {
+            withMotion(Motion.staggered(3), reduceMotion: reduceMotion) {
                 cardsAppeared = true
             }
+        }
+    }
+
+    private func select(_ gender: Gender) {
+        withMotion(Motion.bouncy, reduceMotion: reduceMotion) {
+            selectedGender = gender
         }
     }
 }
@@ -353,18 +393,13 @@ private struct CharacterScreen: View {
 private struct CharacterCard: View {
     let gender: Gender
     let isSelected: Bool
-    let scale: CGFloat
     let action: () -> Void
 
     @State private var animFrame: Int = 1
-    private let timer = Timer.publish(every: 0.8, on: .main, in: .common).autoconnect()
-
-    private let purple = OnboardingView.purple
 
     var body: some View {
         Button(action: {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
+            Haptics.select()
             action()
         }) {
             VStack(spacing: 14) {
@@ -374,7 +409,7 @@ private struct CharacterCard: View {
                         Circle()
                             .fill(
                                 RadialGradient(
-                                    colors: [purple.opacity(0.25), .clear],
+                                    colors: [Theme.purple.opacity(0.25), .clear],
                                     center: .center,
                                     startRadius: 20,
                                     endRadius: 70
@@ -383,38 +418,40 @@ private struct CharacterCard: View {
                             .frame(width: 130, height: 130)
                     }
 
-                    Image(SpriteAssets.spriteName(gender: gender, state: .vital, frame: animFrame))
+                    Image(decorative: SpriteAssets.spriteName(gender: gender, state: .vital, frame: animFrame))
                         .interpolation(.none)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 100, height: 100)
                 }
+                .frame(height: 130)
 
                 Text(gender.displayName)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.5))
+                    .font(.ppBody.weight(.semibold))
+                    .foregroundColor(isSelected ? Theme.textPrimary : Theme.textSecondary)
             }
-            .padding(.vertical, 20)
-            .padding(.horizontal, 12)
+            .padding(.vertical, Space.screen)
+            .padding(.horizontal, Space.m)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(isSelected
-                        ? purple.opacity(0.15)
+                        ? Theme.purple.opacity(0.15)
                         : Color.white.opacity(0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(isSelected
-                                ? purple.opacity(0.6)
+                                ? Theme.purple.opacity(0.6)
                                 : Color.white.opacity(0.1),
                                 lineWidth: isSelected ? 2 : 1)
                     )
             )
-            .scaleEffect(scale)
+            .contentShape(Rectangle())
         }
-        .onReceive(timer) { _ in
-            animFrame = animFrame == 1 ? 2 : 1
-        }
+        .buttonStyle(PPPressableStyle())
+        .accessibilityLabel(gender.displayName)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .spriteFrameLoop($animFrame)
     }
 }
 
@@ -431,18 +468,22 @@ private struct EvolutionScreen: View {
     @State private var sliderAppeared = false
     @State private var featuresAppeared = false
 
-    private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var currentPhase: Int { Int(selectedPhase) }
 
-    private var phaseInfo: (name: String, desc: String, color: Color, steps: String) {
-        switch currentPhase {
-        case 1: return ("Seedling", "Just getting started", .gray, "0 steps")
-        case 2: return ("Growing", "Building momentum", Color(red: 0.0, green: 0.48, blue: 1.0), "25,000 steps")
-        case 3: return ("Thriving", "In your stride", OnboardingView.purple, "75,000 steps")
-        case 4: return ("Legendary", "Peak evolution", Color(red: 1.0, green: 0.6, blue: 0.0), "200,000 steps")
-        default: return ("Seedling", "Just getting started", .gray, "0 steps")
-        }
+    private var phaseColor: Color { Theme.phaseColor(currentPhase) }
+
+    /// Phase color for small text; the brand purple is too dark at caption sizes.
+    private var phaseTextColor: Color {
+        currentPhase == 3 ? Theme.purpleText : phaseColor
+    }
+
+    /// Weekly target to reach this phase, from the same thresholds the app uses.
+    private var phaseSteps: String {
+        guard currentPhase > 1 else { return "0 steps" }
+        let threshold = PhaseCalculator.nextThreshold(for: currentPhase - 1)
+        return "\(threshold.formatted()) steps in a week"
     }
 
     private var avatarState: AvatarState {
@@ -455,143 +496,133 @@ private struct EvolutionScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: 10)
+        OnboardingPage {
+            VStack(spacing: 0) {
+                Text("Watch them evolve")
+                    .font(.ppTitle)
+                    .foregroundColor(Theme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                    .entrance(appeared, offset: 16)
 
-            Text("Watch them evolve")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
+                Spacer().frame(height: 6)
 
-            Spacer().frame(height: 6)
+                Text("Every step powers their growth")
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .entrance(appeared)
 
-            Text("Every step powers their growth")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
-                .opacity(appeared ? 1 : 0)
+                Spacer().frame(height: Space.xl)
 
-            Spacer().frame(height: 24)
-
-            // Character with phase glow
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [phaseInfo.color.opacity(0.25), phaseInfo.color.opacity(0.05), .clear],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 100
+                // Character with phase glow
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [phaseColor.opacity(0.25), phaseColor.opacity(0.05), .clear],
+                                center: .center,
+                                startRadius: 10,
+                                endRadius: 100
+                            )
                         )
-                    )
-                    .frame(width: 200, height: 200)
+                        .frame(width: 200, height: 200)
 
-                Circle()
-                    .stroke(phaseInfo.color.opacity(0.3), lineWidth: 2)
-                    .frame(width: 160, height: 160)
+                    Circle()
+                        .stroke(phaseColor.opacity(0.3), lineWidth: 2)
+                        .frame(width: 160, height: 160)
 
-                Image(SpriteAssets.spriteName(gender: selectedGender, state: avatarState, frame: animFrame))
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 120, height: 120)
-            }
-            .scaleEffect(characterAppeared ? 1.0 : 0.5)
-            .opacity(characterAppeared ? 1 : 0)
-            .animation(.easeInOut(duration: 0.3), value: currentPhase)
-            .onReceive(timer) { _ in
-                animFrame = animFrame == 1 ? 2 : 1
-            }
-
-            Spacer().frame(height: 12)
-
-            // Phase badge
-            HStack(spacing: 8) {
-                Text("Phase \(currentPhase)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Text(phaseInfo.name)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(phaseInfo.color)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(phaseInfo.color.opacity(0.15))
-                    .overlay(
-                        Capsule()
-                            .stroke(phaseInfo.color.opacity(0.3), lineWidth: 1)
-                    )
-            )
-            .animation(.easeInOut(duration: 0.3), value: currentPhase)
-
-            Spacer().frame(height: 6)
-
-            Text(phaseInfo.steps)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(phaseInfo.color.opacity(0.8))
-                .animation(.easeInOut(duration: 0.3), value: currentPhase)
-
-            Spacer().frame(height: 20)
-
-            // Phase dots + slider
-            VStack(spacing: 10) {
-                HStack(spacing: 0) {
-                    ForEach(1...4, id: \.self) { phase in
-                        Circle()
-                            .fill(phase <= currentPhase ? phaseColor(for: phase) : Color.white.opacity(0.15))
-                            .frame(width: 10, height: 10)
-                            .shadow(color: phase <= currentPhase ? phaseColor(for: phase).opacity(0.5) : .clear, radius: 4)
-                        if phase < 4 { Spacer() }
-                    }
+                    Image(decorative: SpriteAssets.spriteName(gender: selectedGender, state: avatarState, frame: animFrame))
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 120, height: 120)
                 }
-                .padding(.horizontal, 32)
+                .entrance(characterAppeared, scale: 0.5)
+                .motion(Motion.snappy, value: currentPhase)
+                .spriteFrameLoop($animFrame)
 
-                Slider(value: $selectedPhase, in: 1...4, step: 1)
-                    .tint(phaseInfo.color)
-                    .padding(.horizontal, 24)
+                Spacer().frame(height: Space.m)
 
-                Text("Drag to preview")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
+                // Phase badge
+                HStack(spacing: Space.s) {
+                    Text("Phase \(currentPhase)")
+                        .font(.ppBody.weight(.bold))
+                        .foregroundColor(Theme.textPrimary)
+                    Text(Theme.phaseName(currentPhase))
+                        .font(.ppBody)
+                        .foregroundColor(phaseTextColor)
+                }
+                .padding(.horizontal, Space.l)
+                .padding(.vertical, Space.s)
+                .background(
+                    Capsule()
+                        .fill(phaseColor.opacity(0.15))
+                        .overlay(
+                            Capsule()
+                                .stroke(phaseColor.opacity(0.3), lineWidth: 1)
+                        )
+                )
+                .motion(Motion.snappy, value: currentPhase)
+                .accessibilityElement(children: .combine)
+
+                Spacer().frame(height: 6)
+
+                Text(phaseSteps)
+                    .font(.ppCaption)
+                    .foregroundColor(phaseTextColor)
+                    .motion(Motion.snappy, value: currentPhase)
+
+                Spacer().frame(height: Space.screen)
+
+                // Phase dots + slider
+                VStack(spacing: 10) {
+                    HStack(spacing: 0) {
+                        ForEach(1...4, id: \.self) { phase in
+                            Circle()
+                                .fill(phase <= currentPhase ? Theme.phaseColor(phase) : Color.white.opacity(0.15))
+                                .frame(width: 10, height: 10)
+                                .shadow(color: phase <= currentPhase ? Theme.phaseColor(phase).opacity(0.5) : .clear, radius: 4)
+                            if phase < 4 { Spacer() }
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    .accessibilityHidden(true)
+
+                    Slider(value: $selectedPhase, in: 1...4, step: 1)
+                        .tint(phaseColor)
+                        .padding(.horizontal, Space.xl)
+                        .accessibilityLabel("Preview phase")
+                        .accessibilityValue("Phase \(currentPhase), \(Theme.phaseName(currentPhase))")
+
+                    Text("Drag to preview")
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                .entrance(sliderAppeared, offset: 16)
+                .onChange(of: currentPhase) { _ in
+                    Haptics.select()
+                }
+
+                Spacer().frame(height: Space.screen)
+
+                // Feature highlights (merged from old differentiation screen)
+                VStack(spacing: Space.m) {
+                    FeaturePill(icon: "arrow.up.circle.fill", text: "Evolves as you walk", color: Theme.mint)
+                    FeaturePill(icon: "iphone.badge.play", text: "Lives on your Lock Screen", color: Theme.cyan)
+                    FeaturePill(icon: "flame.fill", text: "Streaks, missions & rewards", color: Theme.amber)
+                }
+                .entrance(featuresAppeared, offset: 12)
             }
-            .opacity(sliderAppeared ? 1 : 0)
-            .offset(y: sliderAppeared ? 0 : 16)
-
-            Spacer().frame(height: 20)
-
-            // Feature highlights (merged from old differentiation screen)
-            VStack(spacing: 12) {
-                FeaturePill(icon: "arrow.up.circle.fill", text: "Evolves as you walk", color: OnboardingView.mint)
-                FeaturePill(icon: "iphone.badge.play", text: "Lives on your Lock Screen", color: OnboardingView.cyan)
-                FeaturePill(icon: "flame.fill", text: "Streaks, missions & rewards", color: .orange)
-            }
-            .opacity(featuresAppeared ? 1 : 0)
-            .offset(y: featuresAppeared ? 0 : 12)
-
-            Spacer()
-
+        } footer: {
             OnboardingCTA(title: "Continue") { onContinue() }
-
-            Spacer().frame(height: 50)
         }
-        .padding(.horizontal, 24)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.5)) { appeared = true }
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.7).delay(0.15)) { characterAppeared = true }
-            withAnimation(.easeOut(duration: 0.5).delay(0.3)) { sliderAppeared = true }
-            withAnimation(.easeOut(duration: 0.5).delay(0.45)) { featuresAppeared = true }
-        }
-    }
-
-    private func phaseColor(for phase: Int) -> Color {
-        switch phase {
-        case 1: return .gray
-        case 2: return Color(red: 0.0, green: 0.48, blue: 1.0)
-        case 3: return OnboardingView.purple
-        case 4: return Color(red: 1.0, green: 0.6, blue: 0.0)
-        default: return .gray
+            withMotion(Motion.smooth, reduceMotion: reduceMotion) { appeared = true }
+            withMotion(Motion.staggered(2, Motion.bouncy), reduceMotion: reduceMotion) { characterAppeared = true }
+            withMotion(Motion.staggered(5), reduceMotion: reduceMotion) { sliderAppeared = true }
+            withMotion(Motion.staggered(7), reduceMotion: reduceMotion) { featuresAppeared = true }
         }
     }
 }
@@ -601,27 +632,32 @@ private struct FeaturePill: View {
     let text: String
     let color: Color
 
+    @ScaledMetric(relativeTo: .subheadline) private var iconWidth: CGFloat = 24
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.m) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.ppBody.weight(.semibold))
                 .foregroundColor(color)
-                .frame(width: 24)
+                .frame(width: iconWidth)
+                .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white.opacity(0.8))
+                .font(.ppBody)
+                .foregroundColor(Theme.textPrimary.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, Space.screen)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
                 .fill(color.opacity(0.08))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
                         .stroke(color.opacity(0.15), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -638,84 +674,77 @@ private struct PermissionScreen: View {
     @State private var buttonAppeared = false
     @State private var glowPulse = false
 
-    private let purple = OnboardingView.purple
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: 30)
-
-            // Character ready to go
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [purple.opacity(0.2), OnboardingView.cyan.opacity(0.05), .clear],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 110
+        OnboardingPage {
+            VStack(spacing: 0) {
+                // Character ready to go
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Theme.purple.opacity(0.2), Theme.cyan.opacity(0.05), .clear],
+                                center: .center,
+                                startRadius: 10,
+                                endRadius: 110
+                            )
                         )
-                    )
-                    .frame(width: 220, height: 220)
-                    .scaleEffect(glowPulse ? 1.06 : 0.94)
+                        .frame(width: 220, height: 220)
+                        .scaleEffect(glowPulse ? 1.06 : 0.94)
+                        .ambientLoop($glowPulse, animation: Motion.ambient())
 
-                if let gender = selectedGender {
-                    Image(SpriteAssets.spriteName(gender: gender, state: .vital, frame: 1))
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 140, height: 140)
+                    if let gender = selectedGender {
+                        Image(decorative: SpriteAssets.spriteName(gender: gender, state: .vital, frame: 1))
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 140, height: 140)
+                    }
                 }
+                .frame(height: 200)
+                .entrance(avatarAppeared, scale: 0.5)
+
+                Spacer().frame(height: 28)
+
+                Text("Ready to walk together?")
+                    .font(.ppTitle)
+                    .foregroundColor(Theme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                    .entrance(appeared, offset: 16)
+
+                Spacer().frame(height: 10)
+
+                Text("We only read your step count to bring your character to life.")
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .entrance(appeared, offset: 12)
+
+                Spacer().frame(height: 28)
+
+                // Trust badges
+                VStack(spacing: 10) {
+                    TrustBadge(icon: "lock.shield.fill", text: "100% on-device — nothing leaves your phone", color: Theme.mint)
+                    TrustBadge(icon: "eye.slash.fill", text: "No accounts, no tracking, no ads", color: Theme.cyan)
+                    TrustBadge(icon: "heart.fill", text: "Just steps — that's all we need", color: Theme.purpleText)
+                }
+                .entrance(badgesAppeared, offset: 16)
             }
-            .scaleEffect(avatarAppeared ? 1.0 : 0.5)
-            .opacity(avatarAppeared ? 1 : 0)
-
-            Spacer().frame(height: 28)
-
-            Text("Ready to walk together?")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
-
-            Spacer().frame(height: 10)
-
-            Text("We only read your step count to\nbring your character to life.")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 12)
-
-            Spacer().frame(height: 28)
-
-            // Trust badges
-            VStack(spacing: 10) {
-                TrustBadge(icon: "lock.shield.fill", text: "100% on-device — nothing leaves your phone", color: OnboardingView.mint)
-                TrustBadge(icon: "eye.slash.fill", text: "No accounts, no tracking, no ads", color: OnboardingView.cyan)
-                TrustBadge(icon: "heart.fill", text: "Just steps — that's all we need", color: purple)
-            }
-            .opacity(badgesAppeared ? 1 : 0)
-            .offset(y: badgesAppeared ? 0 : 16)
-
-            Spacer()
-
+        } footer: {
             OnboardingCTA(title: "Continue") {
                 completeOnboarding()
             }
-            .opacity(buttonAppeared ? 1 : 0)
-            .offset(y: buttonAppeared ? 0 : 20)
-
-            Spacer().frame(height: 50)
+            .entrance(buttonAppeared, offset: 20)
         }
-        .padding(.horizontal, 24)
         .onAppear {
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) { avatarAppeared = true }
-            withAnimation(.easeOut(duration: 0.5).delay(0.2)) { appeared = true }
-            withAnimation(.easeOut(duration: 0.5).delay(0.4)) { badgesAppeared = true }
-            withAnimation(.easeOut(duration: 0.5).delay(0.55)) { buttonAppeared = true }
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) { glowPulse = true }
+            withMotion(Motion.bouncy, reduceMotion: reduceMotion) { avatarAppeared = true }
+            withMotion(Motion.staggered(3), reduceMotion: reduceMotion) { appeared = true }
+            withMotion(Motion.staggered(6), reduceMotion: reduceMotion) { badgesAppeared = true }
+            withMotion(Motion.staggered(9), reduceMotion: reduceMotion) { buttonAppeared = true }
         }
     }
 
@@ -746,27 +775,32 @@ private struct TrustBadge: View {
     let text: String
     let color: Color
 
+    @ScaledMetric(relativeTo: .footnote) private var iconWidth: CGFloat = 24
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.m) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.ppBody)
                 .foregroundColor(color)
-                .frame(width: 24)
+                .frame(width: iconWidth)
+                .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.7))
+                .font(.ppRowTitle.weight(.medium))
+                .foregroundColor(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
                 .fill(Color.white.opacity(0.04))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
+                        .stroke(Theme.stroke, lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -776,30 +810,14 @@ private struct OnboardingCTA: View {
     let title: String
     let action: () -> Void
 
-    private let purple = OnboardingView.purple
-    private let cyan = OnboardingView.cyan
-
     var body: some View {
-        Button(action: {
-            let impact = UIImpactFeedbackGenerator(style: .medium)
-            impact.impactOccurred()
+        Button {
+            Haptics.tap()
             action()
-        }) {
+        } label: {
             Text(title)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .padding(.vertical, 16)
-                .frame(maxWidth: .infinity)
-                .background(
-                    LinearGradient(
-                        colors: [purple, cyan.opacity(0.8)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(16)
-                .shadow(color: purple.opacity(0.4), radius: 16, y: 6)
         }
+        .buttonStyle(PPPrimaryButtonStyle(colors: [Theme.purple, Theme.purpleDeep]))
         .padding(.horizontal, 32)
     }
 }
@@ -807,7 +825,8 @@ private struct OnboardingCTA: View {
 private struct DynamicIslandMock: View {
     @State private var animFrame: Int = 1
     @State private var expanded = false
-    private let timer = Timer.publish(every: 0.8, on: .main, in: .common).autoconnect()
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 10) {
@@ -817,15 +836,16 @@ private struct DynamicIslandMock: View {
                 .frame(width: 12, height: 12)
 
             if expanded {
-                Image(SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
+                Image(decorative: SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 28, height: 28)
 
+                // Fixed size: this mimics the hardware Dynamic Island, which doesn't scale.
                 Text("4,231")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(Theme.textPrimary.opacity(0.9))
                     .monospacedDigit()
             }
         }
@@ -836,14 +856,14 @@ private struct DynamicIslandMock: View {
                 .fill(Color(red: 0.1, green: 0.1, blue: 0.12))
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(Theme.stroke, lineWidth: 1)
                 )
         )
-        .onReceive(timer) { _ in
-            animFrame = animFrame == 1 ? 2 : 1
-        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Dynamic Island preview showing your character and today's steps")
+        .spriteFrameLoop($animFrame)
         .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.8)) {
+            withMotion(Motion.bouncy.delay(0.8), reduceMotion: reduceMotion) {
                 expanded = true
             }
         }

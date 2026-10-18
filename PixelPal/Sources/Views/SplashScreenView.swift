@@ -5,6 +5,8 @@ import SwiftUI
 struct SplashScreenView: View {
     let onFinished: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     // Animation states
     @State private var glowScale: CGFloat = 0.6
     @State private var glowOpacity: Double = 0
@@ -17,115 +19,110 @@ struct SplashScreenView: View {
     @State private var ringOpacity: Double = 0
     @State private var exitScale: CGFloat = 1.0
     @State private var exitOpacity: Double = 1.0
+    @State private var exitTask: Task<Void, Never>?
     @State private var animFrame: Int = 1
 
-    private let frameTimer = Timer.publish(every: 0.7, on: .main, in: .common).autoconnect()
-
-    private let purple = Color(red: 0.49, green: 0.36, blue: 0.99)
-    private let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
+    private let purple = Theme.purple
+    private let cyan = Theme.cyan
 
     var body: some View {
         ZStack {
             // Background — matches LaunchBackground color
             LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.02, blue: 0.15),
-                    Color(red: 0.08, green: 0.03, blue: 0.20),
-                    Color(red: 0.05, green: 0.02, blue: 0.15)
-                ],
+                colors: [Theme.bgDeep, Theme.bgMid, Theme.bgDeep],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
 
-            // Ambient glow
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            purple.opacity(0.25),
-                            purple.opacity(0.08),
-                            cyan.opacity(0.03),
-                            .clear
-                        ],
-                        center: .center,
-                        startRadius: 10,
-                        endRadius: 180
+            Group {
+                // Ambient glow
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                purple.opacity(0.25),
+                                purple.opacity(0.08),
+                                cyan.opacity(0.03),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 180
+                        )
                     )
-                )
-                .frame(width: 360, height: 360)
-                .scaleEffect(glowScale)
-                .opacity(glowOpacity)
+                    .frame(width: 360, height: 360)
+                    .scaleEffect(reduceMotion ? 1 : glowScale)
+                    .opacity(glowOpacity)
 
-            // Rotating ring
-            Circle()
-                .stroke(
-                    AngularGradient(
-                        colors: [purple.opacity(0.4), cyan.opacity(0.2), .clear, .clear, purple.opacity(0.4)],
-                        center: .center
-                    ),
-                    lineWidth: 1.5
-                )
-                .frame(width: 200, height: 200)
-                .rotationEffect(.degrees(ringRotation))
-                .opacity(ringOpacity)
+                // Rotating ring
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: [purple.opacity(0.4), cyan.opacity(0.2), .clear, .clear, purple.opacity(0.4)],
+                            center: .center
+                        ),
+                        lineWidth: 1.5
+                    )
+                    .frame(width: 200, height: 200)
+                    .rotationEffect(.degrees(ringRotation))
+                    .opacity(ringOpacity)
 
-            // Second ring (counter-rotate)
-            Circle()
-                .stroke(
-                    AngularGradient(
-                        colors: [cyan.opacity(0.3), .clear, .clear, purple.opacity(0.2), cyan.opacity(0.3)],
-                        center: .center
-                    ),
-                    lineWidth: 1
-                )
-                .frame(width: 240, height: 240)
-                .rotationEffect(.degrees(-ringRotation * 0.7))
-                .opacity(ringOpacity * 0.6)
+                // Second ring (counter-rotate)
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: [cyan.opacity(0.3), .clear, .clear, purple.opacity(0.2), cyan.opacity(0.3)],
+                            center: .center
+                        ),
+                        lineWidth: 1
+                    )
+                    .frame(width: 240, height: 240)
+                    .rotationEffect(.degrees(-ringRotation * 0.7))
+                    .opacity(ringOpacity * 0.6)
+            }
+            .accessibilityHidden(true)
 
             // Content
             VStack(spacing: 0) {
                 Spacer()
 
                 // Characters
-                HStack(spacing: 16) {
-                    Image(SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
+                HStack(spacing: Space.l) {
+                    Image(decorative: SpriteAssets.spriteName(gender: .male, state: .vital, frame: animFrame))
                         .interpolation(.none)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 90, height: 90)
 
-                    Image(SpriteAssets.spriteName(gender: .female, state: .vital, frame: animFrame))
+                    Image(decorative: SpriteAssets.spriteName(gender: .female, state: .vital, frame: animFrame))
                         .interpolation(.none)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 90, height: 90)
                 }
-                .scaleEffect(characterScale)
+                .scaleEffect(reduceMotion ? 1 : characterScale)
                 .opacity(characterOpacity)
 
                 Spacer().frame(height: 32)
 
                 // App name
-                VStack(spacing: 8) {
-                    Text("PIXEL")
-                        .font(.system(size: 36, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                        .tracking(6)
-                    + Text(" STEPPER")
-                        .font(.system(size: 36, weight: .black, design: .rounded))
-                        .foregroundColor(purple)
-                        .tracking(6)
-                }
-                .opacity(logoOpacity)
-                .offset(y: logoOffset)
+                appName
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, Space.screen)
+                    .opacity(logoOpacity)
+                    .offset(y: reduceMotion ? 0 : logoOffset)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Pixel Stepper")
+                .accessibilityAddTraits(.isHeader)
 
                 Spacer().frame(height: 10)
 
                 // Tagline
-                Text("Walk. Evolve. Compete.")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(0.4))
+                Text("Walk. Evolve. Grow.")
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textTertiary)
                     .tracking(2)
                     .opacity(subtitleOpacity)
 
@@ -134,53 +131,77 @@ struct SplashScreenView: View {
         }
         .scaleEffect(exitScale)
         .opacity(exitOpacity)
-        .onReceive(frameTimer) { _ in
-            animFrame = animFrame == 1 ? 2 : 1
+        // Two-frame sprite toggle, cancelled automatically when the splash goes away.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(Motion.spriteFrameInterval * 1_000_000_000))
+                if Task.isCancelled { break }
+                animFrame = animFrame == 1 ? 2 : 1
+            }
         }
         .onAppear { runSequence() }
+        .onDisappear { exitTask?.cancel() }
+    }
+
+    /// Two-tone wordmark built by Text interpolation (`Text + Text` is deprecated).
+    private var appName: Text {
+        let pixel = Text("PIXEL")
+            .font(.ppLargeTitle)
+            .foregroundColor(Theme.textPrimary)
+            .tracking(6)
+        let stepper = Text(" STEPPER")
+            .font(.ppLargeTitle)
+            .foregroundColor(purple)
+            .tracking(6)
+        return Text("\(pixel)\(stepper)")
     }
 
     private func runSequence() {
         // Phase 1: Glow fades in
-        withAnimation(.easeOut(duration: 0.6)) {
+        withMotion(Motion.smooth, reduceMotion: reduceMotion) {
             glowOpacity = 1.0
             glowScale = 1.0
         }
 
-        // Phase 2: Rings appear and rotate
-        withAnimation(.easeOut(duration: 0.5).delay(0.2)) {
+        // Phase 2: Rings appear and rotate (rotation skipped under Reduce Motion)
+        withMotion(Motion.smooth.delay(0.2), reduceMotion: reduceMotion) {
             ringOpacity = 1.0
         }
-        withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-            ringRotation = 360
+        if !reduceMotion {
+            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                ringRotation = 360
+            }
         }
 
         // Phase 3: Characters spring in
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.3)) {
+        withMotion(Motion.bouncy.delay(0.3), reduceMotion: reduceMotion) {
             characterOpacity = 1.0
             characterScale = 1.0
         }
 
         // Phase 4: Logo slides up
-        withAnimation(.easeOut(duration: 0.5).delay(0.5)) {
+        withMotion(Motion.smooth.delay(0.5), reduceMotion: reduceMotion) {
             logoOpacity = 1.0
             logoOffset = 0
         }
 
         // Phase 5: Subtitle
-        withAnimation(.easeOut(duration: 0.4).delay(0.7)) {
+        withMotion(Motion.smooth.delay(0.7), reduceMotion: reduceMotion) {
             subtitleOpacity = 1.0
         }
 
         // Phase 6: Hold for a beat, then exit
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-            withAnimation(.easeIn(duration: 0.4)) {
-                exitScale = 1.08
+        exitTask?.cancel()
+        exitTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            guard !Task.isCancelled else { return }
+            withMotion(Motion.exit, reduceMotion: reduceMotion) {
+                if !reduceMotion { exitScale = 1.08 }
                 exitOpacity = 0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                onFinished()
-            }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            onFinished()
         }
     }
 }

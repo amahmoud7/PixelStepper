@@ -33,22 +33,44 @@ struct Provider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> ()) {
-        let entry = Self.loadEntry(date: Date())
-        // Single entry, refresh every 15 minutes
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
+        let now = Date()
+        let entry = Self.loadEntry(date: now)
+        // Data only changes when the app pushes a reload, so refresh hourly at most,
+        // and always at midnight so today's count resets to 0.
+        let calendar = Calendar.current
+        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+            ?? now.addingTimeInterval(3600)
+        let nextUpdate = min(now.addingTimeInterval(3600), startOfTomorrow)
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
     }
 
     /// Loads entry from SharedData with safe fallbacks.
+    /// Data saved on an earlier day is stale: today's steps read as 0.
     private static func loadEntry(date: Date) -> SimpleEntry {
-        let state = SharedData.loadState()
+        let calendar = Calendar.current
+        let lastUpdate = SharedData.loadLastUpdateDate()
+        let isFresh = lastUpdate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
+
+        let state = isFresh ? SharedData.loadState() : .low
         let gender = SharedData.loadGender() ?? .male
         let phase = SharedData.loadPhase()
-        let steps = SharedData.loadSteps()
+        let steps = isFresh ? SharedData.loadSteps() : 0
         let cumulativeSteps = SharedData.loadCumulativeSteps()
-        let weekData = SharedData.loadWeekData()
+        var weekData = SharedData.loadWeekData()
         let cosmetics = SharedData.loadEquippedCosmetics()
+
+        // Shift the week so its last element is today rather than the last update day.
+        if let lastUpdate, !isFresh, !weekData.isEmpty {
+            let daysStale = calendar.dateComponents(
+                [.day],
+                from: calendar.startOfDay(for: lastUpdate),
+                to: calendar.startOfDay(for: date)
+            ).day ?? 0
+            if daysStale > 0 {
+                weekData = Array((weekData + Array(repeating: 0, count: min(daysStale, 7))).suffix(7))
+            }
+        }
 
         return SimpleEntry(
             date: date,
@@ -122,6 +144,24 @@ private func widgetPhaseName(for phase: Int) -> String {
     }
 }
 
+/// Soft amber for days below goal, instead of an alarming red.
+private var widgetSoftAmber: Color {
+    Color(red: 1.0, green: 0.7, blue: 0.3)
+}
+
+private func widgetEnergyLabel(for state: AvatarState) -> String {
+    switch state {
+    case .vital: return "Vital energy"
+    case .neutral: return "Neutral energy"
+    case .low: return "Low energy"
+    }
+}
+
+/// Single VoiceOver summary for a widget, e.g. "Pixel Stepper, 4,210 steps, Neutral energy, Phase 1 Seedling".
+private func widgetAccessibilityLabel(for entry: SimpleEntry) -> String {
+    "Pixel Stepper, \(entry.steps.formatted()) steps, \(widgetEnergyLabel(for: entry.state)), Phase \(entry.phase) \(widgetPhaseName(for: entry.phase))"
+}
+
 // MARK: - Small Widget View
 // Export (170x170): char (45,18) 80x80, steps (35,104) 100x24, phase (30,132) 110x16
 
@@ -144,7 +184,7 @@ struct PixelPalSmallWidgetView: View {
             ZStack {
                 if let skinAsset = entry.cosmeticSkin {
                     // Full skin replacement
-                    Image(skinAsset)
+                    Image(decorative: skinAsset)
                         .resizable()
                         .interpolation(.none)
                         .aspectRatio(contentMode: .fit)
@@ -152,13 +192,13 @@ struct PixelPalSmallWidgetView: View {
                 } else {
                     // Cosmetic background or default
                     if let bgAsset = entry.cosmeticBackground {
-                        Image(bgAsset)
+                        Image(decorative: bgAsset)
                             .resizable()
                             .interpolation(.none)
                             .frame(width: 80, height: 80)
                     }
 
-                    Image(spriteName)
+                    Image(decorative: spriteName)
                         .resizable()
                         .interpolation(.none)
                         .aspectRatio(contentMode: .fit)
@@ -166,7 +206,7 @@ struct PixelPalSmallWidgetView: View {
 
                     // Cosmetic hat
                     if let hatAsset = entry.cosmeticHat {
-                        Image(hatAsset)
+                        Image(decorative: hatAsset)
                             .resizable()
                             .interpolation(.none)
                             .frame(width: 48, height: 48)
@@ -175,7 +215,7 @@ struct PixelPalSmallWidgetView: View {
 
                     // Cosmetic accessory
                     if let accAsset = entry.cosmeticAccessory {
-                        Image(accAsset)
+                        Image(decorative: accAsset)
                             .resizable()
                             .interpolation(.none)
                             .frame(width: 40, height: 40)
@@ -188,12 +228,14 @@ struct PixelPalSmallWidgetView: View {
             Spacer().frame(height: 6)
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("\(entry.steps)")
+                Text(entry.steps.formatted())
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text("steps")
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundStyle(Color.white.opacity(0.6))
             }
             .frame(height: 24)
@@ -202,14 +244,16 @@ struct PixelPalSmallWidgetView: View {
 
             HStack(spacing: 4) {
                 Image(systemName: widgetPhaseIcon(for: entry.phase))
-                    .font(.system(size: 9))
+                    .font(.system(size: 11))
                     .foregroundStyle(widgetPhaseColor(for: entry.phase))
                 Text("Phase \(entry.phase)")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(widgetPhaseColor(for: entry.phase))
             }
             .frame(height: 16)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(widgetAccessibilityLabel(for: entry))
     }
 }
 
@@ -245,7 +289,7 @@ struct PixelPalMediumWidgetView: View {
                 ZStack {
                     if let skinAsset = entry.cosmeticSkin {
                         // Full skin replacement
-                        Image(skinAsset)
+                        Image(decorative: skinAsset)
                             .resizable()
                             .interpolation(.none)
                             .aspectRatio(contentMode: .fit)
@@ -253,7 +297,7 @@ struct PixelPalMediumWidgetView: View {
                     } else {
                         // Cosmetic background or default glow
                         if let bgAsset = entry.cosmeticBackground {
-                            Image(bgAsset)
+                            Image(decorative: bgAsset)
                                 .resizable()
                                 .interpolation(.none)
                                 .frame(width: 68, height: 68)
@@ -263,7 +307,7 @@ struct PixelPalMediumWidgetView: View {
                                 .frame(width: 68, height: 68)
                         }
 
-                        Image(spriteName)
+                        Image(decorative: spriteName)
                             .resizable()
                             .interpolation(.none)
                             .aspectRatio(contentMode: .fit)
@@ -271,7 +315,7 @@ struct PixelPalMediumWidgetView: View {
 
                         // Cosmetic hat
                         if let hatAsset = entry.cosmeticHat {
-                            Image(hatAsset)
+                            Image(decorative: hatAsset)
                                 .resizable()
                                 .interpolation(.none)
                                 .frame(width: 32, height: 32)
@@ -280,7 +324,7 @@ struct PixelPalMediumWidgetView: View {
 
                         // Cosmetic accessory
                         if let accAsset = entry.cosmeticAccessory {
-                            Image(accAsset)
+                            Image(decorative: accAsset)
                                 .resizable()
                                 .interpolation(.none)
                                 .frame(width: 26, height: 26)
@@ -289,8 +333,10 @@ struct PixelPalMediumWidgetView: View {
                     }
                 }
 
-                Text(entry.state.rawValue.capitalized)
-                    .font(.system(size: 8, weight: .bold))
+                Text(entry.state.description)
+                    .font(.system(size: 11, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .foregroundStyle(widgetStateColor(for: entry.state))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
@@ -304,12 +350,14 @@ struct PixelPalMediumWidgetView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Steps count — h=32
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(entry.steps)")
+                    Text(entry.steps.formatted())
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Text("steps")
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(Color.white.opacity(0.6))
                 }
                 .frame(height: 32)
@@ -342,14 +390,16 @@ struct PixelPalMediumWidgetView: View {
                 // Bar labels — h=12
                 HStack {
                     Text("\(Int(goalProgress * 100))%")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(widgetStateColor(for: entry.state))
                     Spacer()
-                    Text("\(entry.steps)/\(Int(dailyGoal).formatted())")
-                        .font(.system(size: 9, weight: .medium))
+                    Text("\(entry.steps.formatted())/\(Int(dailyGoal).formatted())")
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.6))
                 }
-                .frame(height: 12)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(height: 14)
 
                 Spacer().frame(height: 6)
 
@@ -362,11 +412,13 @@ struct PixelPalMediumWidgetView: View {
                 // Phase info — h=14
                 HStack(spacing: 3) {
                     Image(systemName: widgetPhaseIcon(for: entry.phase))
-                        .font(.system(size: 8))
+                        .font(.system(size: 11))
                         .foregroundStyle(widgetPhaseColor(for: entry.phase))
                     Text("Phase \(entry.phase) • \(widgetPhaseName(for: entry.phase))")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(widgetPhaseColor(for: entry.phase))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .frame(height: 14)
             }
@@ -374,6 +426,8 @@ struct PixelPalMediumWidgetView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(widgetAccessibilityLabel(for: entry))
     }
 }
 
@@ -407,7 +461,7 @@ struct PixelPalLargeWidgetView: View {
             ZStack {
                 if let skinAsset = entry.cosmeticSkin {
                     // Full skin replacement
-                    Image(skinAsset)
+                    Image(decorative: skinAsset)
                         .resizable()
                         .interpolation(.none)
                         .aspectRatio(contentMode: .fit)
@@ -415,7 +469,7 @@ struct PixelPalLargeWidgetView: View {
                 } else {
                     // Cosmetic background or default glow
                     if let bgAsset = entry.cosmeticBackground {
-                        Image(bgAsset)
+                        Image(decorative: bgAsset)
                             .resizable()
                             .interpolation(.none)
                             .frame(width: 94, height: 94)
@@ -425,7 +479,7 @@ struct PixelPalLargeWidgetView: View {
                             .frame(width: 94, height: 94)
                     }
 
-                    Image(spriteName)
+                    Image(decorative: spriteName)
                         .resizable()
                         .interpolation(.none)
                         .aspectRatio(contentMode: .fit)
@@ -433,7 +487,7 @@ struct PixelPalLargeWidgetView: View {
 
                     // Cosmetic hat
                     if let hatAsset = entry.cosmeticHat {
-                        Image(hatAsset)
+                        Image(decorative: hatAsset)
                             .resizable()
                             .interpolation(.none)
                             .frame(width: 48, height: 48)
@@ -442,7 +496,7 @@ struct PixelPalLargeWidgetView: View {
 
                     // Cosmetic accessory
                     if let accAsset = entry.cosmeticAccessory {
-                        Image(accAsset)
+                        Image(decorative: accAsset)
                             .resizable()
                             .interpolation(.none)
                             .frame(width: 40, height: 40)
@@ -456,12 +510,14 @@ struct PixelPalLargeWidgetView: View {
 
             // Steps hero number — h=42
             VStack(spacing: 2) {
-                Text("\(entry.steps)")
+                Text(entry.steps.formatted())
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
 
-                Text(entry.state.rawValue.capitalized)
+                Text(entry.state.description)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(widgetStateColor(for: entry.state))
                     .padding(.horizontal, 8)
@@ -498,20 +554,22 @@ struct PixelPalLargeWidgetView: View {
 
             // Bar labels — h=14
             HStack {
-                Text("\(entry.steps) / 7,500")
-                    .font(.system(size: 10, weight: .medium))
+                Text("\(entry.steps.formatted()) / \(7500.formatted())")
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.6))
                 Spacer()
                 if dailyProgress >= 1.0 {
                     Text("Goal reached!")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.green)
                 } else {
                     Text("\(max(0, 7500 - entry.steps).formatted()) to go")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(widgetStateColor(for: entry.state))
                 }
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .frame(height: 14)
             .padding(.horizontal, 24)
 
@@ -526,10 +584,11 @@ struct PixelPalLargeWidgetView: View {
 
             // Day labels — h=14
             HStack(spacing: 0) {
-                ForEach(dayLabels(), id: \.self) { label in
+                // Labels repeat ("S", "T"), so identify by position.
+                ForEach(Array(dayLabels().enumerated()), id: \.offset) { _, label in
                     Text(label)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.6))
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -541,10 +600,10 @@ struct PixelPalLargeWidgetView: View {
             // Phase info — h=16
             HStack(spacing: 4) {
                 Image(systemName: widgetPhaseIcon(for: entry.phase))
-                    .font(.system(size: 9))
+                    .font(.system(size: 11))
                     .foregroundStyle(widgetPhaseColor(for: entry.phase))
                 Text("Phase \(entry.phase) • \(widgetPhaseName(for: entry.phase))")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(widgetPhaseColor(for: entry.phase))
             }
             .frame(height: 16)
@@ -556,11 +615,13 @@ struct PixelPalLargeWidgetView: View {
                 .frame(height: 16)
                 .padding(.horizontal, 24)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(widgetAccessibilityLabel(for: entry))
     }
 
     private func dayLabels() -> [String] {
         let calendar = Calendar.current
-        let today = Date()
+        let today = entry.date
         let labels = ["S", "M", "T", "W", "T", "F", "S"]
         var result: [String] = []
         for offset in -6...0 {
@@ -588,7 +649,7 @@ private struct MiniBarChart: View {
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(barColor(steps: steps, isToday: isToday))
                         .frame(maxWidth: .infinity)
-                        .frame(height: max(3, CGFloat(steps) / CGFloat(maxSteps) * geo.size.height))
+                        .frame(height: max(3, min(1, CGFloat(steps) / CGFloat(maxSteps)) * geo.size.height))
                 }
             }
         }
@@ -597,7 +658,7 @@ private struct MiniBarChart: View {
     private func barColor(steps: Int, isToday: Bool) -> Color {
         if isToday { return Color.gray }
         if steps >= 7500 { return .green }
-        if steps > 0 { return Color.red.opacity(0.7) }
+        if steps > 0 { return widgetSoftAmber.opacity(0.6) }
         return Color.white.opacity(0.15)
     }
 }
@@ -617,7 +678,7 @@ private struct WeekBarChart: View {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(barColor(steps: steps, isToday: isToday))
                         .frame(maxWidth: .infinity)
-                        .frame(height: max(3, CGFloat(steps) / CGFloat(maxSteps) * geo.size.height))
+                        .frame(height: max(3, min(1, CGFloat(steps) / CGFloat(maxSteps)) * geo.size.height))
                 }
             }
         }
@@ -626,7 +687,7 @@ private struct WeekBarChart: View {
     private func barColor(steps: Int, isToday: Bool) -> Color {
         if isToday { return Color.gray }
         if steps >= 7500 { return .green }
-        if steps > 0 { return Color.red.opacity(0.7) }
+        if steps > 0 { return widgetSoftAmber.opacity(0.6) }
         return Color.white.opacity(0.15)
     }
 }
@@ -646,8 +707,8 @@ private struct WidgetWeekDotsView: View {
     var body: some View {
         HStack {
             Text("This week")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.6))
 
             Spacer()
 
@@ -680,7 +741,7 @@ private struct WidgetWeekDotsView: View {
         if !hasData {
             return Color.white.opacity(0.2)
         }
-        return goalMet ? Color.green : Color.red.opacity(0.6)
+        return goalMet ? Color.green : widgetSoftAmber.opacity(0.6)
     }
 }
 
@@ -715,12 +776,14 @@ struct PixelPalAccessoryCircularView: View {
                 .rotationEffect(.degrees(-90))
                 .padding(2)
 
-            Image(spriteName)
+            Image(decorative: spriteName)
                 .resizable()
                 .interpolation(.none)
                 .aspectRatio(contentMode: .fit)
                 .padding(6)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(widgetAccessibilityLabel(for: entry))
     }
 }
 
@@ -740,7 +803,7 @@ struct PixelPalAccessoryRectangularView: View {
         )
 
         HStack(spacing: 8) {
-            Image(spriteName)
+            Image(decorative: spriteName)
                 .resizable()
                 .interpolation(.none)
                 .aspectRatio(contentMode: .fit)
@@ -749,7 +812,7 @@ struct PixelPalAccessoryRectangularView: View {
             VStack(alignment: .leading, spacing: 3) {
                 // Steps + state dot
                 HStack(spacing: 4) {
-                    Text("\(entry.steps) steps")
+                    Text("\(entry.steps.formatted()) steps")
                         .font(.caption)
                         .fontWeight(.semibold)
                     Circle()
@@ -760,9 +823,10 @@ struct PixelPalAccessoryRectangularView: View {
                 // Phase info
                 HStack(spacing: 3) {
                     Image(systemName: widgetPhaseIcon(for: entry.phase))
-                        .font(.system(size: 8))
+                        .font(.system(size: 10))
                     Text("Phase \(entry.phase) • \(widgetPhaseName(for: entry.phase))")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
+                        .minimumScaleFactor(0.8)
                 }
                 .foregroundStyle(.secondary)
             }
@@ -770,6 +834,8 @@ struct PixelPalAccessoryRectangularView: View {
             Spacer()
         }
         .lineLimit(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(widgetAccessibilityLabel(for: entry))
     }
 }
 
@@ -805,8 +871,10 @@ struct PixelPalHomeWidget: Widget {
                         gradient
                     }
             } else {
+                // Fill the whole widget so white text never lands on the system background.
                 PixelPalHomeWidgetView(entry: entry)
                     .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(gradient)
             }
         }

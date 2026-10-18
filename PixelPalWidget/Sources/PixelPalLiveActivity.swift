@@ -31,7 +31,7 @@ struct PixelPalLiveActivity: Widget {
     }
 }
 
-// MARK: - Animated Sprite View (12fps via TimelineView)
+// MARK: - Animated Sprite View (2-frame toggle via TimelineView)
 
 private struct AnimatedSpriteView: View {
     let genderRaw: String
@@ -39,34 +39,39 @@ private struct AnimatedSpriteView: View {
     let isWalking: Bool
     var size: CGFloat = 40
 
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: isWalking ? 0.083 : 0.8)) { timeline in
-            let frame = frameIndex(for: timeline.date)
-            let name = spriteName(frame: frame)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-            if let uiImage = UIImage(named: name) {
-                Image(uiImage: uiImage)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size, height: size)
+    private static let frameInterval: TimeInterval = 0.8
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                sprite(frame: 1)
+            } else {
+                TimelineView(.periodic(from: .now, by: Self.frameInterval)) { timeline in
+                    sprite(frame: Int(timeline.date.timeIntervalSince1970 / Self.frameInterval) % 2 + 1)
+                }
             }
         }
+        .accessibilityHidden(true)
     }
 
-    private func frameIndex(for date: Date) -> Int {
-        if isWalking {
-            let index = Int(date.timeIntervalSince1970 / 0.083)
-            return (index % SpriteAssets.walkingFrameCount) + 1
-        } else {
-            let index = Int(date.timeIntervalSince1970 / 0.8)
-            return (index % 2) + 1
+    @ViewBuilder
+    private func sprite(frame: Int) -> some View {
+        if let uiImage = UIImage(named: spriteName(frame: frame)) {
+            Image(uiImage: uiImage)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
         }
     }
 
+    /// Frame 1 or 2. Walking maps these to two key poses of the walk cycle.
     private func spriteName(frame: Int) -> String {
         if isWalking {
-            return SpriteAssets.walkingSpriteName(genderRaw: genderRaw, frame: frame)
+            let walkFrame = frame == 1 ? 1 : SpriteAssets.walkingFrameCount / 2 + 1
+            return SpriteAssets.walkingSpriteName(genderRaw: genderRaw, frame: walkFrame)
         }
         return SpriteAssets.spriteName(genderRaw: genderRaw, stateRaw: stateRaw, frame: frame)
     }
@@ -76,12 +81,22 @@ private struct AnimatedSpriteView: View {
 
 private func phaseColor(for phase: Int) -> Color {
     switch phase {
-    case 1: return .gray
+    case 1: return Color(white: 0.7)
     case 2: return .blue
     case 3: return .purple
     case 4: return .orange
-    default: return .gray
+    default: return Color(white: 0.7)
     }
+}
+
+/// Secondary text on the black activity background (meaningful text stays >= 0.6).
+private let secondaryText = Color.white.opacity(0.7)
+
+/// Soft amber for days below goal, instead of an alarming red.
+private let softAmber = Color(red: 1.0, green: 0.7, blue: 0.3)
+
+private func stateLabel(for stateRaw: String) -> String {
+    (AvatarState(rawValue: stateRaw) ?? .neutral).description
 }
 
 private func stateColor(for stateRaw: String) -> Color {
@@ -137,7 +152,7 @@ private struct LockScreenView: View {
                         .fontWeight(.bold)
                         .foregroundColor(.green)
                 } else {
-                    Text("\(context.state.steps) steps")
+                    Text("\(context.state.steps.formatted()) steps")
                         .font(.headline)
                         .foregroundColor(.white)
                 }
@@ -146,20 +161,22 @@ private struct LockScreenView: View {
                     Circle()
                         .fill(stateColor(for: context.state.stateRaw))
                         .frame(width: 5, height: 5)
-                    Text(context.state.stateRaw.capitalized)
+                    Text(stateLabel(for: context.state.stateRaw))
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(secondaryText)
                     Text("•")
                         .font(.system(size: 11))
                         .foregroundColor(Color.white.opacity(0.3))
+                        .accessibilityHidden(true)
                     Text("Phase \(context.state.currentPhase)")
                         .font(.system(size: 11))
-                        .foregroundColor(phaseColor(for: context.state.currentPhase).opacity(0.8))
+                        .foregroundColor(phaseColor(for: context.state.currentPhase))
                 }
             }
 
             Spacer()
         }
+        .accessibilityElement(children: .combine)
         .padding(.horizontal, 14)
         .padding(.vertical, 16)
         .activityBackgroundTint(.black)
@@ -192,7 +209,7 @@ private struct CompactTrailingView: View {
                 .foregroundColor(.green)
         } else {
             HStack(spacing: 4) {
-                Text("\(context.state.steps)")
+                Text(context.state.steps.formatted())
                     .font(.caption)
                     .fontWeight(.semibold)
                     .monospacedDigit()
@@ -235,6 +252,8 @@ private struct MinimalView: View {
                 size: 16
             )
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(context.state.steps.formatted()) steps")
     }
 }
 
@@ -270,8 +289,10 @@ private struct ExpandedLeadingView: View {
                 )
             }
 
-            Text(context.state.stateRaw.capitalized)
-                .font(.system(size: 7, weight: .bold))
+            Text(stateLabel(for: context.state.stateRaw))
+                .font(.caption2.weight(.bold))
+                .lineLimit(1)
+                .fixedSize()
                 .foregroundColor(stateColor(for: context.state.stateRaw))
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
@@ -279,11 +300,11 @@ private struct ExpandedLeadingView: View {
                 .clipShape(Capsule())
                 .offset(y: 8)
         }
-        .frame(width: 40, height: 44)
+        .frame(minWidth: 40, minHeight: 44)
     }
 }
 
-// Trailing: 70x36 step count — font 20pt + "steps" 8pt
+// Trailing: 70x36 step count — font 20pt + "steps" caption2
 private struct ExpandedTrailingView: View {
     let context: ActivityViewContext<PixelStepperAttributes>
 
@@ -294,13 +315,15 @@ private struct ExpandedTrailingView: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.green)
             } else {
-                Text("\(context.state.steps)")
+                Text(context.state.steps.formatted())
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
 
                 Text("steps")
-                    .font(.system(size: 8))
-                    .foregroundColor(.secondary)
+                    .font(.caption2)
+                    .foregroundColor(secondaryText)
             }
         }
     }
@@ -313,11 +336,14 @@ private struct ExpandedCenterView: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: phaseIcon(for: context.state.currentPhase))
-                .font(.system(size: 8))
+                .font(.caption2)
                 .foregroundColor(phaseColor(for: context.state.currentPhase))
+                .accessibilityHidden(true)
             Text("Phase \(context.state.currentPhase) • \(phaseName(for: context.state.currentPhase))")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(phaseColor(for: context.state.currentPhase).opacity(0.9))
+                .font(.caption2.weight(.medium))
+                .foregroundColor(phaseColor(for: context.state.currentPhase))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 }
@@ -354,7 +380,7 @@ private struct ExpandedBottomView: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: geo.size.width * goalProgress, height: 4)
+                        .frame(width: geo.size.width * max(0, goalProgress), height: 4)
                 }
             }
             .frame(height: 4)
@@ -364,23 +390,25 @@ private struct ExpandedBottomView: View {
 
             // Progress labels — h=13
             HStack {
-                Text("\(context.state.steps) / \(Int(dailyGoal).formatted())")
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
+                Text("\(context.state.steps.formatted()) / \(Int(dailyGoal).formatted())")
+                    .font(.caption2)
+                    .foregroundColor(secondaryText)
 
                 Spacer()
 
                 if goalProgress >= 1.0 {
                     Text("Goal reached!")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundColor(.green)
                 } else {
                     Text("\(stepsRemaining.formatted()) to go")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(stateColor(for: context.state.stateRaw))
                 }
             }
-            .frame(height: 13)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(height: 14)
 
             // 2px gap
             Spacer().frame(height: 2)
@@ -416,8 +444,8 @@ private struct WeekDotsView: View {
     var body: some View {
         HStack {
             Text("This week")
-                .font(.system(size: 8))
-                .foregroundColor(.secondary)
+                .font(.caption2)
+                .foregroundColor(secondaryText)
 
             Spacer()
 
@@ -450,6 +478,6 @@ private struct WeekDotsView: View {
         if !hasData {
             return Color.white.opacity(0.1)
         }
-        return goalMet ? Color.green : Color.red.opacity(0.6)
+        return goalMet ? Color.green : softAmber.opacity(0.6)
     }
 }

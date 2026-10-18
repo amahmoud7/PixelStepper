@@ -3,25 +3,28 @@ import SwiftUI
 /// Stats tab: Week memory + personal records + phase progress + 30-day calendar heatmap.
 struct StatsView: View {
     @EnvironmentObject var appState: AppStateManager
+    @ObservedObject private var historyManager = HistoryManager.shared
+
+    /// True until the first day with recorded steps lands in history.
+    private var hasHistory: Bool {
+        historyManager.history.days.contains { $0.steps > 0 }
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                Text("Stats")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-
-                // Week memory
-                WeekMemorySection()
-                    .padding(.horizontal, 20)
+            VStack(spacing: Space.screen) {
+                if hasHistory {
+                    // Week memory
+                    WeekMemorySection()
+                        .padding(.horizontal, Space.screen)
+                } else {
+                    StatsEmptyState()
+                        .padding(.horizontal, Space.screen)
+                }
 
                 // Personal records
                 PersonalRecordsView()
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, Space.screen)
 
                 // Phase progress
                 PhaseProgressCard(
@@ -29,15 +32,41 @@ struct StatsView: View {
                     currentPhase: appState.currentPhase,
                     isPremium: appState.storeManager.isPremium
                 )
-                .padding(.horizontal, 20)
+                .padding(.horizontal, Space.screen)
 
                 // 30-day calendar heatmap
-                MonthCalendarView()
-                    .padding(.horizontal, 20)
+                if hasHistory {
+                    MonthCalendarView()
+                        .padding(.horizontal, Space.screen)
+                }
 
-                Spacer().frame(height: 100)
+                Spacer().frame(height: Space.xl)
             }
+            .padding(.top, Space.s)
         }
+    }
+}
+
+// MARK: - Empty State
+
+private struct StatsEmptyState: View {
+    var body: some View {
+        VStack(spacing: Space.s) {
+            Image(systemName: "figure.walk")
+                .font(.ppTitle)
+                .foregroundColor(Theme.purpleText)
+                .accessibilityHidden(true)
+
+            Text("Your first week will show up here as you walk.")
+                .font(.ppBody)
+                .foregroundColor(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Space.s)
+        .ppCard()
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -53,71 +82,66 @@ private struct PhaseProgressCard: View {
     }
 
     private var progress: Double {
-        PhaseCalculator.weeklyProgress(weeklySteps: weeklySteps, currentPhase: currentPhase)
+        min(max(PhaseCalculator.weeklyProgress(weeklySteps: weeklySteps, currentPhase: currentPhase), 0), 1)
     }
 
     private var progressColor: Color {
-        switch currentPhase {
-        case 1: return .gray
-        case 2: return .blue
-        case 3: return .purple
-        case 4: return .orange
-        default: return .gray
-        }
+        Theme.phaseColor(currentPhase)
+    }
+
+    /// Phase color for small text; the brand purple is too dark at caption sizes.
+    private var progressTextColor: Color {
+        currentPhase == 3 ? Theme.purpleText : progressColor
     }
 
     private var phaseName: String {
-        switch currentPhase {
-        case 1: return "Seedling"
-        case 2: return "Growing"
-        case 3: return "Thriving"
-        case 4: return "Legendary"
-        default: return ""
-        }
+        Theme.phaseName(currentPhase)
     }
 
     private var nextPhaseName: String {
-        switch currentPhase {
-        case 1: return "Growing"
-        case 2: return "Thriving"
-        case 3: return "Legendary"
-        default: return ""
-        }
+        Theme.phaseName(currentPhase + 1)
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Space.m) {
             HStack {
-                Text("Phase Progress")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                Text("Phase progress")
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Text("Phase \(currentPhase) · \(phaseName)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(progressColor)
+                    .font(.ppCaption.weight(.semibold))
+                    .foregroundColor(progressTextColor)
             }
 
             if currentPhase < 4 {
                 // Step count display
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
                     Text(weeklySteps.formatted())
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(.ppStat)
+                        .foregroundColor(Theme.textPrimary)
+                        .monospacedDigit()
+                        .numericRoll(value: weeklySteps)
                     Text("/ \(nextThreshold.formatted()) steps")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(.ppBody)
+                        .foregroundColor(Theme.textSecondary)
                     Spacer()
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(progressColor)
+                        .font(.ppBody.weight(.bold))
+                        .foregroundColor(progressTextColor)
+                        .monospacedDigit()
+                        .numericRoll(value: progress)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(weeklySteps.formatted()) of \(nextThreshold.formatted()) steps this week")
+                .accessibilityValue("\(Int(progress * 100)) percent")
 
                 // Progress bar
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.1))
+                            .fill(Theme.surfaceStrong)
                             .frame(height: 8)
 
                         RoundedRectangle(cornerRadius: 4)
@@ -130,42 +154,48 @@ private struct PhaseProgressCard: View {
                             )
                             .frame(width: geometry.size.width * progress, height: 8)
                             .shadow(color: progressColor.opacity(0.3), radius: 4)
+                            .motion(Motion.number, value: progress)
                     }
                 }
                 .frame(height: 8)
+                .accessibilityHidden(true)
 
                 if currentPhase >= 2 && !isPremium {
                     Text("Unlock Premium for Phase \(currentPhase + 1)")
-                        .font(.caption2)
-                        .foregroundColor(.purple.opacity(0.8))
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.purpleText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     let remaining = max(0, nextThreshold - weeklySteps)
                     Text("\(remaining.formatted()) steps to \(nextPhaseName) · resets weekly")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.35))
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
                     Text(weeklySteps.formatted())
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(.ppStat)
+                        .foregroundColor(Theme.textPrimary)
+                        .monospacedDigit()
+                        .numericRoll(value: weeklySteps)
                     Text("steps this week")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(.ppBody)
+                        .foregroundColor(Theme.textSecondary)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
 
-                GeometryReader { geometry in
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(progressColor)
-                        .frame(height: 8)
-                        .shadow(color: progressColor.opacity(0.3), radius: 4)
-                }
-                .frame(height: 8)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(progressColor)
+                    .frame(height: 8)
+                    .shadow(color: progressColor.opacity(0.3), radius: 4)
+                    .accessibilityHidden(true)
 
                 Text("Maximum evolution reached!")
-                    .font(.caption2)
-                    .foregroundColor(.orange.opacity(0.8))
+                    .font(.ppMicro)
+                    .foregroundColor(Theme.amber)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .glassCard()

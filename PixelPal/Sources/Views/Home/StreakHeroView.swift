@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Glass Dashboard streak display — ring + stats side-by-side, steps/missions grid below, at-risk banner.
+/// Glass Dashboard streak display — ring + stats side-by-side, steps/missions grid below, keep-going nudge.
 struct StreakHeroView: View {
     let streak: Int
     let todaySteps: Int
@@ -14,15 +14,15 @@ struct StreakHeroView: View {
         min(Double(todaySteps) / Double(dailyGoal), 1.0)
     }
 
-    private var isAtRisk: Bool {
+    private var showsNudge: Bool {
         streak > 0 && todaySteps < dailyGoal
     }
 
     private var streakColor: Color {
-        if streak == 0 { return .gray }
-        if streak >= 30 { return Color(red: 1.0, green: 0.84, blue: 0.0) }
+        if streak == 0 { return Theme.textTertiary }
+        if streak >= 30 { return Theme.gold }
         if streak >= 7 { return Color(red: 1.0, green: 0.2, blue: 0.1) }
-        return .orange
+        return Theme.amber
     }
 
     private var bestStreak: Int {
@@ -42,54 +42,49 @@ struct StreakHeroView: View {
     // MARK: - Zero Streak
 
     private var zeroStreakView: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 16) {
-                // Progress ring
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.06), lineWidth: 5)
-                        .frame(width: 72, height: 72)
+        HStack(spacing: Space.l) {
+            // Progress ring
+            ZStack {
+                Circle()
+                    .stroke(Theme.surface, lineWidth: 5)
+                    .frame(width: 72, height: 72)
 
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(Color.blue, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .frame(width: 72, height: 72)
-                        .rotationEffect(.degrees(-90))
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Theme.blue, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .frame(width: 72, height: 72)
+                    .rotationEffect(.degrees(-90))
+                    .motion(Motion.number, value: progress)
 
-                    VStack(spacing: 1) {
-                        Text("\(Int(progress * 100))%")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("START YOUR STREAK")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(1)
-
-                    Text("0 days")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-
-                    Text("\(max(0, dailyGoal - todaySteps).formatted()) steps to begin")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.blue.opacity(0.8))
-                }
-
-                Spacer()
+                Text("\(Int(progress * 100))%")
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .numericRoll(value: Int(progress * 100))
+                    .frame(width: 56)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    )
-            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(Int(progress * 100)) percent of daily goal")
+
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("START YOUR STREAK")
+                    .font(.ppOverline)
+                    .tracking(1)
+                    .foregroundColor(Theme.textTertiary)
+
+                Text("0 days")
+                    .font(.ppStat)
+                    .foregroundColor(Theme.textPrimary)
+
+                Text("\(max(0, dailyGoal - todaySteps).formatted()) steps to begin")
+                    .font(.ppMicro)
+                    .foregroundColor(Theme.blue)
+            }
+
+            Spacer(minLength: 0)
         }
+        .ppCard(radius: Radius.card)
     }
 
     // MARK: - Active Streak (Glass Dashboard)
@@ -97,11 +92,11 @@ struct StreakHeroView: View {
     private var activeStreakView: some View {
         VStack(spacing: 10) {
             // Main glass card: ring + stats side-by-side
-            HStack(spacing: 16) {
+            HStack(spacing: Space.l) {
                 // Streak ring
                 ZStack {
                     Circle()
-                        .stroke(Color.white.opacity(0.06), lineWidth: 5)
+                        .stroke(Theme.surface, lineWidth: 5)
                         .frame(width: 76, height: 76)
 
                     Circle()
@@ -117,142 +112,134 @@ struct StreakHeroView: View {
                         .frame(width: 76, height: 76)
                         .rotationEffect(.degrees(-90))
                         .shadow(color: streakColor.opacity(0.3), radius: 6)
+                        .motion(Motion.number, value: progress)
 
                     VStack(spacing: 1) {
                         Image(systemName: "flame.fill")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(streakColor)
 
                         Text("\(streak)")
-                            .font(.system(size: 22, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
+                            .font(.ppStat)
+                            .foregroundColor(Theme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .numericRoll(value: streak)
                     }
+                    .frame(width: 60)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(streak) day streak")
 
                 // Stats column
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text("CURRENT STREAK")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(.ppOverline)
                         .tracking(1)
+                        .foregroundColor(Theme.textTertiary)
 
-                    Text("\(streak) days")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                    Text("^[\(streak) day](inflect: true)")
+                        .font(.ppStat)
+                        .foregroundColor(Theme.textPrimary)
 
                     // 7-day dots
                     weekDots
 
-                    Text("Best: \(bestStreak) days")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(streakColor.opacity(0.8))
+                    Text("Best: ^[\(bestStreak) day](inflect: true)")
+                        .font(.ppMicro)
+                        .foregroundColor(streakColor)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    )
-            )
+            .ppCard(radius: Radius.card)
 
             // 2-column grid: steps + missions
             HStack(spacing: 10) {
                 // Steps mini card
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text("TODAY")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(0.5)
+                        .font(.ppOverline)
+                        .tracking(1)
+                        .foregroundColor(Theme.textTertiary)
 
-                    Text("\(todaySteps.formatted())")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                    Text(todaySteps.formatted())
+                        .font(.ppStat)
+                        .foregroundColor(Theme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .numericRoll(value: todaySteps)
 
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.white.opacity(0.06))
+                            Capsule()
+                                .fill(Theme.surface)
                                 .frame(height: 3)
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(red: 0.2, green: 0.78, blue: 0.35), Color(red: 0.19, green: 0.82, blue: 0.35)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                            Capsule()
+                                .fill(Theme.mint)
                                 .frame(width: geo.size.width * progress, height: 3)
                         }
                     }
                     .frame(height: 3)
+                    .motion(Motion.number, value: progress)
+                    .accessibilityHidden(true)
 
                     Text("\(Int(progress * 100))% of goal")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.3))
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textTertiary)
                 }
-                .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                        )
-                )
+                .ppCard(padding: 14, radius: Radius.button)
 
                 // Missions mini card
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text("MISSIONS")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(0.5)
+                        .font(.ppOverline)
+                        .tracking(1)
+                        .foregroundColor(Theme.textTertiary)
 
                     HStack(alignment: .firstTextBaseline, spacing: 1) {
                         Text("\(missionsCompleted)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .font(.ppStat)
+                            .foregroundColor(Theme.textPrimary)
+                            .numericRoll(value: missionsCompleted)
                         Text("/\(missionsTotal)")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundColor(.white.opacity(0.3))
+                            .font(.ppBody)
+                            .foregroundColor(Theme.textTertiary)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(missionsCompleted) of \(missionsTotal) missions done")
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Space.xs) {
                         ForEach(0..<missionsTotal, id: \.self) { i in
-                            RoundedRectangle(cornerRadius: 2)
+                            Capsule()
                                 .fill(i < missionsCompleted
-                                    ? Color(red: 0.2, green: 0.78, blue: 0.35)
+                                    ? Theme.mint
                                     : (i == missionsCompleted
-                                        ? Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.4)
-                                        : Color.white.opacity(0.06)))
+                                        ? Theme.purple.opacity(0.4)
+                                        : Theme.surface))
                                 .frame(height: 3)
                         }
                     }
+                    .accessibilityHidden(true)
 
                     let balance = PersistenceManager.shared.progressState.stepCoinBalance
-                    Text("+\(balance) coins earned")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.3))
+                    HStack(spacing: Space.xs) {
+                        Image(systemName: "circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.gold)
+                            .accessibilityHidden(true)
+                        Text("\(balance) coins")
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.textTertiary)
+                    }
                 }
-                .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                        )
-                )
+                .ppCard(padding: 14, radius: Radius.button)
             }
 
-            // Streak at risk banner
-            if isAtRisk {
+            // Gentle nudge when today's goal isn't met yet
+            if showsNudge {
                 StreakAtRiskView(
                     stepsRemaining: dailyGoal - todaySteps,
                     streak: streak,
@@ -267,92 +254,91 @@ struct StreakHeroView: View {
 
     private var weekDots: some View {
         let weekData = HistoryManager.shared.history.weekViewData()
+        let metCount = weekData.filter { $0.isGoalMet }.count
 
-        return HStack(spacing: 4) {
+        return HStack(spacing: Space.xs) {
             ForEach(weekData) { day in
                 Circle()
                     .fill(day.isToday && !day.isGoalMet
-                        ? Color.orange.opacity(0.4)
-                        : (day.isGoalMet ? Color(red: 0.2, green: 0.78, blue: 0.35) : Color.white.opacity(0.1)))
+                        ? Theme.amber.opacity(0.4)
+                        : (day.isGoalMet ? Theme.mint : Color.white.opacity(0.1)))
                     .frame(width: 6, height: 6)
                     .overlay(
                         day.isToday && !day.isGoalMet
-                            ? Circle().stroke(Color.orange.opacity(0.6), lineWidth: 1)
+                            ? Circle().stroke(Theme.amber.opacity(0.6), lineWidth: 1)
                             : nil
                     )
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(metCount) of 7 days at goal")
     }
 }
 
-/// Streak-at-risk alert banner with time estimate.
+/// Encouraging "keep going" banner with a walk-time estimate. No pressure, no warning icons.
 struct StreakAtRiskView: View {
     let stepsRemaining: Int
     let streak: Int
     var isPremium: Bool = false
     var onUpgradeTap: (() -> Void)?
-    @State private var isPulsing = false
 
+    /// ~100 steps per minute of walking, rounded up.
     private var walkMinutes: Int {
-        max(5, stepsRemaining / 65) // ~65 steps per minute casual walk
+        max(1, (stepsRemaining + 99) / 100)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                    .font(.system(size: 14))
-                    .scaleEffect(isPulsing ? 1.1 : 1.0)
+                Image(systemName: "flame.fill")
+                    .font(.body)
+                    .foregroundColor(Theme.amber)
+                    .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Streak at risk")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.orange)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text("Keep your streak going")
+                        .font(.ppRowTitle)
+                        .foregroundColor(Theme.amber)
 
-                    Text("\(stepsRemaining.formatted()) steps to save it — ~\(walkMinutes) min walk")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.orange.opacity(0.7))
+                    Text("\(stepsRemaining.formatted()) steps · about \(walkMinutes) min walk")
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textSecondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            .accessibilityElement(children: .combine)
 
             if !isPremium, let onUpgradeTap {
-                Button(action: onUpgradeTap) {
+                Button {
+                    Haptics.tap()
+                    onUpgradeTap()
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "shield.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color(red: 0.0, green: 0.83, blue: 1.0))
+                            .font(.caption2)
+                            .foregroundColor(Theme.cyan)
+                            .accessibilityHidden(true)
                         Text("Premium includes Streak Freeze")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                        Spacer()
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.textSecondary)
+                        Spacer(minLength: 0)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.3))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(Theme.textTertiary)
+                            .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .frame(minHeight: 44)
                     .background(Color.white.opacity(0.04))
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(PPPressableStyle())
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.orange.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
-        }
+        .ppCard(padding: 0, radius: Radius.row, tint: Theme.amber)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
     }
 }

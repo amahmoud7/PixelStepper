@@ -4,24 +4,27 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var appState: AppStateManager
     @EnvironmentObject var healthManager: HealthKitManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var todaySteps: Int { Int(healthManager.currentSteps) }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 // Top bar
                 topBar
-                    .padding(.top, 8)
+                    .padding(.top, Space.s)
 
                 // HealthKit unavailable banner (iPad/no Health app)
                 if !healthManager.isHealthDataAvailable {
                     healthKitUnavailableBanner
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, Space.screen)
                 }
 
                 // "Not seeing steps?" help (shows when authorized but 0 steps for a while)
                 if healthManager.isAuthorized && healthManager.currentSteps == 0 && hasProfile {
                     stepsHelpBanner
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, Space.screen)
                 }
 
                 // Hero avatar
@@ -29,46 +32,53 @@ struct HomeView: View {
                     state: appState.avatarState,
                     gender: appState.gender,
                     phase: appState.currentPhase,
-                    loadout: appState.currentLoadout
+                    loadout: appState.currentLoadout,
+                    animatesEntrance: true
                 )
 
                 // Step count display
-                VStack(spacing: 2) {
-                    Text(Int(healthManager.currentSteps).formatted())
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                VStack(spacing: Space.xxs) {
+                    Text(todaySteps.formatted())
+                        .font(.ppLargeTitle)
+                        .foregroundColor(Theme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .numericRoll(value: todaySteps)
                     Text("steps today")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.5))
+                        .font(.ppRowTitle)
+                        .foregroundColor(Theme.textTertiary)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(todaySteps.formatted()) steps today")
 
                 // Streak hero (Glass Dashboard)
                 StreakHeroView(
                     streak: appState.currentStreak,
-                    todaySteps: Int(healthManager.currentSteps),
+                    todaySteps: todaySteps,
                     dailyGoal: 7500,
                     missionsCompleted: appState.missionManager.completedCount,
                     missionsTotal: appState.missionManager.missions.count,
                     isPremium: appState.storeManager.isPremium,
                     onUpgradeTap: { appState.showPaywall = true }
                 )
-                .padding(.horizontal, 20)
+                .padding(.horizontal, Space.screen)
 
                 // Daily missions
                 DailyMissionsView()
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, Space.screen)
 
                 if let lastUpdate = SharedData.loadLastUpdateDate() {
                     Text("Updated \(lastUpdate.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption2)
-                        .foregroundColor(.gray.opacity(0.6))
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textTertiary)
                 }
 
-                Spacer().frame(height: 100)
+                Spacer().frame(height: Space.xl)
             }
         }
         .refreshable {
-            healthManager.fetchData()
+            healthManager.invalidateCache()
+            await healthManager.refreshToday()
             appState.fetchCumulativeSteps(healthManager: healthManager)
             appState.updateState(healthManager: healthManager)
         }
@@ -87,77 +97,77 @@ struct HomeView: View {
     private var healthKitUnavailableBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: "heart.slash.fill")
-                .font(.system(size: 20))
-                .foregroundColor(.red.opacity(0.6))
+                .font(.title3)
+                .foregroundColor(.red.opacity(0.8))
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("Health data not available")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.ppRowTitle)
+                    .foregroundColor(Theme.textPrimary)
                 Text("This device doesn't support step tracking")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
+                    .font(.ppMicro)
+                    .foregroundColor(Theme.textTertiary)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.red.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
-                )
-        )
+        .ppCard(padding: Space.m, radius: Radius.row, tint: .red)
+        .accessibilityElement(children: .combine)
     }
 
     /// Shows when authorized but steps are 0 — user may have denied read access in Health settings.
     private var stepsHelpBanner: some View {
         Group {
             if !dismissedStepsHelp {
-                Button(action: { showStepsHelp = true }) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "questionmark.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(.orange.opacity(0.8))
+                HStack(spacing: 0) {
+                    Button {
+                        Haptics.tap()
+                        showStepsHelp = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(.orange)
+                                .accessibilityHidden(true)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Not seeing your steps?")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                            Text("Tap for help enabling step access")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.white.opacity(0.4))
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text("Not seeing your steps?")
+                                    .font(.ppRowTitle)
+                                    .foregroundColor(Theme.textPrimary)
+                                Text("Tap for help enabling step access")
+                                    .font(.ppMicro)
+                                    .foregroundColor(Theme.textTertiary)
+                            }
+
+                            Spacer(minLength: 0)
                         }
-
-                        Spacer()
-
-                        Button(action: { dismissedStepsHelp = true }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white.opacity(0.3))
-                                .padding(6)
-                        }
+                        .padding(.leading, Space.m)
+                        .padding(.vertical, Space.m)
+                        .contentShape(Rectangle())
                     }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.orange.opacity(0.06))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.orange.opacity(0.15), lineWidth: 1)
-                            )
-                    )
+                    .buttonStyle(PPPressableStyle())
+
+                    Button {
+                        Haptics.soft()
+                        withMotion(Motion.snappy, reduceMotion: reduceMotion) { dismissedStepsHelp = true }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(Theme.textTertiary)
+                            .minTapTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss")
+                    .padding(.trailing, Space.xs)
                 }
+                .ppCard(padding: 0, radius: Radius.row, tint: .orange)
+                .transition(.opacity)
                 .alert("Enable Step Tracking", isPresented: $showStepsHelp) {
                     Button("Open Health App") {
                         if let url = URL(string: "x-apple-health://") {
                             UIApplication.shared.open(url)
                         }
-                    }
-                    Button("Try Again") {
-                        healthManager.requestAuthorization { _ in }
                     }
                     Button("Dismiss", role: .cancel) {
                         dismissedStepsHelp = true
@@ -177,51 +187,68 @@ struct HomeView: View {
         return appState.weeklySteps >= PhaseCalculator.phase2Max
     }
 
+    private func showPaywall() {
+        Haptics.tap()
+        appState.showPaywall = true
+    }
+
     private var topBar: some View {
         HStack {
             PhaseDisplayView(phase: appState.currentPhase, isPremium: appState.storeManager.isPremium)
 
             if isReadyToEvolve {
-                Button(action: { appState.showPaywall = true }) {
+                Button(action: showPaywall) {
                     Text("Ready to evolve")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(red: 0.49, green: 0.36, blue: 0.99))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .font(.ppMicro.weight(.bold))
+                        .foregroundColor(Theme.purpleText)
+                        .padding(.horizontal, Space.s)
+                        .padding(.vertical, Space.xs)
                         .background(
                             Capsule()
-                                .fill(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.15))
+                                .fill(Theme.purple.opacity(0.15))
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.3), lineWidth: 1)
+                                        .stroke(Theme.purple.opacity(0.3), lineWidth: 1)
                                 )
                         )
+                        .minTapTarget()
                 }
+                .buttonStyle(PPPressableStyle())
+                .accessibilityHint("Opens Premium")
             }
 
             Spacer()
 
             if !appState.storeManager.isPremium {
-                Button(action: { appState.showPaywall = true }) {
+                Button(action: showPaywall) {
                     Image(systemName: "crown.fill")
                         .font(.title3)
-                        .foregroundColor(.yellow.opacity(0.8))
-                        .padding(8)
+                        .foregroundColor(Theme.gold)
+                        .padding(Space.s)
                         .background(Color.white.opacity(0.08))
                         .clipShape(Circle())
+                        .minTapTarget()
                 }
+                .buttonStyle(PPPressableStyle())
+                .accessibilityLabel("Premium")
             }
 
-            Button(action: { appState.showShareSheet = true }) {
+            Button {
+                Haptics.tap()
+                appState.showShareSheet = true
+            } label: {
                 Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(8)
+                    .font(.body.weight(.medium))
+                    .foregroundColor(Theme.textSecondary)
+                    .padding(Space.s)
                     .background(Color.white.opacity(0.08))
                     .clipShape(Circle())
+                    .minTapTarget()
             }
+            .buttonStyle(PPPressableStyle())
+            .accessibilityLabel("Share")
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, Space.screen)
     }
 
 }

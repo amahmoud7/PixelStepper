@@ -233,24 +233,26 @@ class StoreManager: ObservableObject {
         return status
     }
 
-    /// Gets the trial period description (e.g. "7 days free") for a product.
-    func trialDescription(for product: Product) -> String? {
+    /// Free-trial length for a product ("1 week", "7 days"), or nil without a free trial.
+    func trialLength(for product: Product) -> String? {
         guard let subscription = product.subscription,
               let introOffer = subscription.introductoryOffer,
               introOffer.paymentMode == .freeTrial else { return nil }
 
         let period = introOffer.period
-        switch period.unit {
-        case .day:
-            return "\(period.value) day\(period.value > 1 ? "s" : "") free"
-        case .week:
-            return "\(period.value) week\(period.value > 1 ? "s" : "") free"
-        case .month:
-            return "\(period.value) month\(period.value > 1 ? "s" : "") free"
-        case .year:
-            return "\(period.value) year\(period.value > 1 ? "s" : "") free"
-        @unknown default:
-            return "Free trial"
+        guard let unit = PeriodUnit(period.unit) else { return nil }
+        return PeriodText.count(period.value, unit)
+    }
+}
+
+extension PeriodUnit {
+    init?(_ unit: Product.SubscriptionPeriod.Unit) {
+        switch unit {
+        case .day: self = .day
+        case .week: self = .week
+        case .month: self = .month
+        case .year: self = .year
+        @unknown default: return nil
         }
     }
 }

@@ -286,11 +286,10 @@ struct PaywallView: View {
         }
     }
 
-    /// Trial length for the selected plan without the trailing " free" ("1 week"), when the user can claim it.
+    /// Trial length for the selected plan ("1 week"), when the user can claim it.
     private var selectedTrialLength: String? {
-        guard isTrialEligible, let product = selectedProduct,
-              let trialText = storeManager.trialDescription(for: product) else { return nil }
-        return trialText.replacingOccurrences(of: " free", with: "")
+        guard isTrialEligible, let product = selectedProduct else { return nil }
+        return storeManager.trialLength(for: product)
     }
 
     private var purchaseButtonTitle: String {
@@ -311,16 +310,9 @@ struct PaywallView: View {
 
     /// "/year", "/month", "/3 months"; empty for non-subscription products.
     private func periodSuffix(for product: Product) -> String {
-        guard let period = product.subscription?.subscriptionPeriod else { return "" }
-        let unit: String
-        switch period.unit {
-        case .day: unit = "day"
-        case .week: unit = "week"
-        case .month: unit = "month"
-        case .year: unit = "year"
-        default: unit = "period"
-        }
-        return period.value == 1 ? "/\(unit)" : "/\(period.value) \(unit)s"
+        guard let period = product.subscription?.subscriptionPeriod,
+              let unit = PeriodUnit(period.unit) else { return "" }
+        return PeriodText.perPeriod(period.value, unit)
     }
 
     // MARK: - Actions
@@ -550,13 +542,32 @@ private struct PlanCard: View {
         return (product.price / 12).formatted(product.priceFormatStyle)
     }
 
+    private var period: (value: Int, unit: PeriodUnit)? {
+        guard let sub = product.subscription, let unit = PeriodUnit(sub.subscriptionPeriod.unit) else { return nil }
+        return (sub.subscriptionPeriod.value, unit)
+    }
+
+    /// "$29.99/yr" for single periods; spelled out ("/3 months") otherwise.
     private var priceWithPeriod: String {
-        guard let sub = product.subscription else { return product.displayPrice }
-        switch sub.subscriptionPeriod.unit {
-        case .month: return "\(product.displayPrice)/mo"
-        case .year: return "\(product.displayPrice)/yr"
-        default: return product.displayPrice
+        guard let period else { return product.displayPrice }
+        switch (period.value, period.unit) {
+        case (1, .month): return "\(product.displayPrice)/mo"
+        case (1, .year): return "\(product.displayPrice)/yr"
+        default: return product.displayPrice + PeriodText.perPeriod(period.value, period.unit)
         }
+    }
+
+    /// VoiceOver reads "/yr" literally; speak "29.99 dollars per year" instead.
+    private var accessibilityText: String {
+        var parts = [product.displayName]
+        if let badge { parts.append(badge.capitalized) }
+        if let period {
+            parts.append("\(product.displayPrice) \(PeriodText.spokenPerPeriod(period.value, period.unit))")
+        } else {
+            parts.append(product.displayPrice)
+        }
+        if let perMonthText { parts.append("just \(perMonthText) per month") }
+        return parts.joined(separator: ", ")
     }
 
     var body: some View {
@@ -616,6 +627,7 @@ private struct PlanCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PPPressableStyle())
+        .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

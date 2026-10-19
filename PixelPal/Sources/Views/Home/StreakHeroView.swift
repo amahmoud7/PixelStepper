@@ -72,7 +72,7 @@ struct StreakHeroView: View {
 
     private func accessibilityText(metCount: Int, dayCount: Int) -> String {
         var parts = [title]
-        if bestStreak > 0 { parts.append("best \(bestStreak) days") }
+        if bestStreak > 0 { parts.append("best \(PeriodText.count(bestStreak, .day))") }
         parts.append("\(metCount) of \(dayCount) days at goal this week")
         return parts.joined(separator: ", ")
     }

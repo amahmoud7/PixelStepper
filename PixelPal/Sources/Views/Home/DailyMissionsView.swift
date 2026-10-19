@@ -241,13 +241,13 @@ private struct MissionRow: View {
 private struct WeeklyChallengeRow: View {
     let challenge: WeeklyChallenge
 
-    private var daysLeftText: String {
-        let calendar = Calendar.current
-        let weekday = calendar.component(.weekday, from: Date())
-        // Sunday=1, Saturday=7. Days until Sunday (end of week)
-        let daysLeft = weekday == 1 ? 0 : (8 - weekday)
-        return daysLeft == 0 ? "Ends today" : "\(daysLeft)d left"
+    /// Days until the ISO week ends on Sunday (Sunday=1, Saturday=7).
+    private var daysLeft: Int {
+        let weekday = Calendar.current.component(.weekday, from: Date())
+        return weekday == 1 ? 0 : (8 - weekday)
     }
+
+    private var daysLeftText: String { PeriodText.shortDaysLeft(daysLeft) }
 
     @ScaledMetric(relativeTo: .footnote) private var scaledIcon: CGFloat = 28
     private var iconSize: CGFloat { min(scaledIcon, 44) }
@@ -257,7 +257,7 @@ private struct WeeklyChallengeRow: View {
         if !challenge.isCompleted {
             parts.append("\(challenge.progress.formatted()) of \(challenge.target.formatted())")
         }
-        parts.append(daysLeftText)
+        parts.append(PeriodText.daysLeft(daysLeft))
         return parts.joined(separator: ", ")
     }
 

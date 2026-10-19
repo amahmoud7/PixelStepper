@@ -122,6 +122,27 @@ final class ScreenshotTests: XCTestCase {
         snap("A6-hook")
     }
 
+    /// The largest accessibility text size, to catch clipping and broken layouts.
+    func test_5_largeText() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestMode", "-UITestSkipOnboarding", "-UITestDemoData",
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        pause(3)
+        dismissSystemAlerts()
+        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        snap("60-xl-home")
+        app.swipeUp()
+        pause()
+        snap("61-xl-home-scrolled")
+        app.tabBars.buttons["Stats"].tap()
+        pause(2)
+        snap("62-xl-stats")
+        app.tabBars.buttons["Profile"].tap()
+        pause()
+        snap("63-xl-profile")
+    }
+
     // MARK: - Helpers
 
     private func launch(_ arguments: [String]) -> XCUIApplication {

@@ -36,7 +36,6 @@ class AppStateManager: ObservableObject {
 
     // MARK: - Private
 
-    private var previousPhase: Int = 1
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init
@@ -95,7 +94,6 @@ class AppStateManager: ObservableObject {
 
         let progress = PersistenceManager.shared.progressState
         currentPhase = progress.currentPhase
-        previousPhase = progress.currentPhase
         cumulativeSteps = progress.totalStepsSinceStart
 
         let weekData = SharedData.loadWeekData()

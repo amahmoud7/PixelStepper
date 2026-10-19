@@ -226,16 +226,6 @@ class StoreManager: ObservableObject {
         products.first { $0.id == ProductID.yearlyPremium.rawValue }
     }
 
-    /// Formatted price for monthly subscription.
-    var monthlyPriceString: String {
-        monthlyProduct?.displayPrice ?? "$2.99/month"
-    }
-
-    /// Formatted price for yearly subscription.
-    var yearlyPriceString: String {
-        yearlyProduct?.displayPrice ?? "$19.99/year"
-    }
-
     /// Whether the user is eligible for a free trial on a given product.
     func isTrialEligible(for product: Product) async -> Bool {
         guard let subscription = product.subscription else { return false }
@@ -269,14 +259,11 @@ class StoreManager: ObservableObject {
 
 enum StoreError: LocalizedError {
     case failedVerification
-    case productNotFound
 
     var errorDescription: String? {
         switch self {
         case .failedVerification:
             return "Transaction verification failed."
-        case .productNotFound:
-            return "Product not found."
         }
     }
 }

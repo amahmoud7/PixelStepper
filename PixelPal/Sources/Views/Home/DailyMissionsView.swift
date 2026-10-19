@@ -124,6 +124,10 @@ private struct MissionRow: View {
         return "\(mission.title), \(mission.progress.formatted()) of \(mission.target.formatted())"
     }
 
+    /// Checkbox grows with the row's text (capped) so it never looks tiny beside large labels.
+    @ScaledMetric(relativeTo: .footnote) private var scaledIcon: CGFloat = 22
+    private var iconSize: CGFloat { min(scaledIcon, 36) }
+
     var body: some View {
         HStack(spacing: 0) {
             // Left color border
@@ -133,7 +137,7 @@ private struct MissionRow: View {
 
             HStack(spacing: 10) {
                 statusIcon
-                    .frame(width: 22, height: 22)
+                    .frame(width: iconSize, height: iconSize)
 
                 // Content
                 VStack(alignment: .leading, spacing: Space.xxs) {
@@ -180,10 +184,10 @@ private struct MissionRow: View {
                                             endPoint: .trailing
                                         )
                                     )
-                                    .frame(width: max(0, geo.size.width - 35) * mission.progressFraction)
+                                    .frame(width: max(0, geo.size.width - (iconSize + 13)) * mission.progressFraction)
                                     .shadow(color: color.opacity(0.4), radius: 3)
                             }
-                            .padding(.leading, 35)
+                            .padding(.leading, iconSize + 13)
                     }
                 }
                 .accessibilityHidden(true)
@@ -203,7 +207,7 @@ private struct MissionRow: View {
                 .fill(Theme.mint)
                 .overlay(
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: iconSize * 0.5, weight: .bold))
                         .foregroundColor(.white)
                 )
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
@@ -216,7 +220,7 @@ private struct MissionRow: View {
                 )
                 .overlay(
                     Image(systemName: "play.fill")
-                        .font(.system(size: 9))
+                        .font(.system(size: iconSize * 0.42))
                         .foregroundColor(color)
                 )
                 .transition(.opacity)
@@ -244,6 +248,9 @@ private struct WeeklyChallengeRow: View {
         let daysLeft = weekday == 1 ? 0 : (8 - weekday)
         return daysLeft == 0 ? "Ends today" : "\(daysLeft)d left"
     }
+
+    @ScaledMetric(relativeTo: .footnote) private var scaledIcon: CGFloat = 28
+    private var iconSize: CGFloat { min(scaledIcon, 44) }
 
     private var accessibilityText: String {
         var parts = ["Weekly challenge", challenge.title, challenge.description]
@@ -275,20 +282,20 @@ private struct WeeklyChallengeRow: View {
             .padding(.bottom, 6)
 
             HStack(spacing: 10) {
-                // Icon
+                // Icon (scales with text, capped)
                 RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
                     .fill(Theme.gold.opacity(challenge.isCompleted ? 0.2 : 0.1))
-                    .frame(width: 28, height: 28)
+                    .frame(width: iconSize, height: iconSize)
                     .overlay(
                         ZStack {
                             if challenge.isCompleted {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(size: iconSize * 0.43, weight: .bold))
                                     .foregroundColor(Theme.mint)
                                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                             } else {
                                 Image(systemName: challenge.type.icon)
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(size: iconSize * 0.43, weight: .bold))
                                     .foregroundColor(Theme.gold)
                                     .transition(.opacity)
                             }

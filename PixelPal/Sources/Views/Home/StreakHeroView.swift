@@ -97,11 +97,15 @@ private struct WeekDaySquare: View {
         return symbols.indices.contains(index) ? symbols[index] : ""
     }
 
+    /// Square grows with the weekday initial beneath it (capped).
+    @ScaledMetric(relativeTo: .caption2) private var scaledSquare: CGFloat = 10
+    private var square: CGFloat { min(scaledSquare, 18) }
+
     var body: some View {
         VStack(spacing: Space.xs) {
-            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+            RoundedRectangle(cornerRadius: square * 0.25, style: .continuous)
                 .fill(fill)
-                .frame(width: 10, height: 10)
+                .frame(width: square, height: square)
                 .overlay(
                     RoundedRectangle(cornerRadius: 3.5, style: .continuous)
                         .stroke(day.isToday ? Theme.today : .clear, lineWidth: 1.5)

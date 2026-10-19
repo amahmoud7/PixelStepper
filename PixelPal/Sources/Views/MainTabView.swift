@@ -36,7 +36,7 @@ struct MainTabView: View {
         }
         .tint(Theme.purple)
         .overlay { overlays }
-        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .sheet(isPresented: $appState.showPaywall) {
             PaywallView(storeManager: appState.storeManager, gender: appState.gender, currentPhase: appState.currentPhase)
         }

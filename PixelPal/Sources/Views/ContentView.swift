@@ -98,6 +98,37 @@ struct ContentView: View {
         if LaunchFlags.skipOnboarding && persistence.userProfile == nil {
             persistence.saveUserProfile(UserProfile.createNew(gender: .female))
         }
+        if LaunchFlags.demoData {
+            seedDemoData()
+        }
+    }
+
+    /// History and progress for App Store screenshots: a 12-day streak, Phase 2, nothing to celebrate.
+    private func seedDemoData() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var history = DailyHistory.createNew()
+        let past = LaunchFlags.Demo.pastDays
+        for (index, steps) in past.enumerated() {
+            guard let date = calendar.date(byAdding: .day, value: index - past.count, to: today) else { continue }
+            history.recordDay(DailyGoalState.create(for: date, steps: steps, goal: 7500))
+        }
+        history.recordDay(DailyGoalState.create(for: today, steps: LaunchFlags.Demo.todaySteps, goal: 7500))
+        HistoryManager.shared.history = history
+        persistence.saveDailyHistory(history)
+
+        persistence.updateProgress { progress in
+            progress.currentPhase = 2
+            progress.totalStepsSinceStart = LaunchFlags.Demo.cumulativeSteps
+            progress.todaySteps = LaunchFlags.Demo.todaySteps
+            progress.currentStreak = LaunchFlags.Demo.streakDays
+            progress.longestStreak = 21
+            progress.bestDaySteps = 14_382
+            progress.totalActiveDays = 48
+            progress.hasSeenPaywall = true
+            progress.hasRequestedReview = true
+        }
+        UserDefaults.standard.set(true, forKey: "liveActivityCardDismissed")
     }
 }
 

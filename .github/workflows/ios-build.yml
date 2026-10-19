@@ -72,8 +72,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Largest current iPhone, and the smallest supported screen.
-        device: [large, small]
+        # Largest iPhone, smallest supported screen, and the App Store 6.3" size (demo data).
+        device: [large, small, appstore]
     steps:
       - uses: actions/checkout@v4
 
@@ -101,6 +101,9 @@ jobs:
           types = [t["identifier"] for t in runtime.get("supportedDeviceTypes", [])]
           if want == "small":
               prefs = ["iPhone-SE-3rd-generation", "iPhone-16e", "iPhone-13-mini"]
+          elif want == "appstore":
+              # 1206x2622: the mandatory App Store iPhone size.
+              prefs = ["iPhone-17-Pro", "iPhone-16-Pro"]
           else:
               prefs = ["iPhone-17-Pro-Max", "iPhone-16-Pro-Max", "iPhone-17-Pro", "iPhone-16-Pro"]
           chosen = next((t for p in prefs for t in types if t.endswith(p)),
@@ -117,11 +120,16 @@ jobs:
       - name: Capture screenshots
         run: |
           mkdir -p screenshots
+          if [ "${{ matrix.device }}" = "appstore" ]; then
+            ONLY="-only-testing:PixelPalUITests/ScreenshotTests/test_3_appStore -only-testing:PixelPalUITests/ScreenshotTests/test_4_appStoreEvolve"
+          else
+            ONLY="-only-testing:PixelPalUITests/ScreenshotTests/test_1_onboarding -only-testing:PixelPalUITests/ScreenshotTests/test_2_mainTabs"
+          fi
           TEST_RUNNER_SCREENSHOT_DIR="$PWD/screenshots" xcodebuild test \
             -project PixelStepper.xcodeproj \
             -scheme PixelPal \
             -destination "id=${{ steps.sim.outputs.udid }}" \
-            -only-testing:PixelPalUITests \
+            $ONLY \
             CODE_SIGNING_ALLOWED=NO \
             > ui.log 2>&1 && STATUS=0 || STATUS=$?
           grep -E "error:|Test Case .* (passed|failed)|\*\* TEST " ui.log | sort -u | head -60

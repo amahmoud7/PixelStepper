@@ -76,6 +76,52 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    /// Marketing captures with demo data, named A1…A5 for the App Store compositor.
+    func test_3_appStore() {
+        let app = launch(["-UITestMode", "-UITestSkipOnboarding", "-UITestDemoData"])
+        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        pause(3)
+        snap("A1-home")
+
+        app.swipeUp()
+        pause()
+        snap("A3-missions")
+        app.swipeDown()
+
+        app.tabBars.buttons["Stats"].tap()
+        pause(2)
+        snap("A4-stats")
+
+        // Paywall (no prices in demo mode): the four phase auras and what Premium adds.
+        app.tabBars.buttons["Profile"].tap()
+        pause()
+        let upgrade = app.buttons["Upgrade"]
+        if upgrade.waitForExistence(timeout: 3) {
+            upgrade.tap()
+            pause(2)
+            snap("A5-premium")
+            let close = app.buttons["Close"]
+            if close.waitForExistence(timeout: 3) { close.tap() } else { app.swipeDown() }
+            pause()
+        }
+
+        // Live Activity in the Dynamic Island: start it from Profile, then go to the Home Screen.
+        let toggle = app.switches["Live Activity"]
+        if toggle.waitForExistence(timeout: 3), toggle.isEnabled {
+            toggle.tap()
+            pause(2)
+            XCUIDevice.shared.press(.home)
+            pause(3)
+            snap("A2-island")
+        }
+    }
+
+    func test_4_appStoreEvolve() {
+        _ = launch(["-UITestMode", "-UITestResetData"])
+        pause()
+        snap("A6-hook")
+    }
+
     // MARK: - Helpers
 
     private func launch(_ arguments: [String]) -> XCUIApplication {

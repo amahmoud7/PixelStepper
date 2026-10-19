@@ -68,6 +68,10 @@ class HealthKitManager: ObservableObject {
 
     /// Fetches today's steps and the last 7 days. Calls within a few seconds of each other are coalesced.
     func fetchData(force: Bool = false) {
+        if LaunchFlags.demoData {
+            applyDemoData()
+            return
+        }
         guard force || Date().timeIntervalSince(lastFetch) > fetchThrottle else { return }
         lastFetch = Date()
         fetchTodaySteps()
@@ -205,6 +209,7 @@ class HealthKitManager: ObservableObject {
     /// Total steps since `baselineDate`: a per-day cached sum of prior days plus today's live count.
     @MainActor
     func fetchCumulativeStepsAsync(since baselineDate: Date) async -> Int {
+        if LaunchFlags.demoData { return LaunchFlags.Demo.cumulativeSteps }
         let startOfToday = Calendar.current.startOfDay(for: Date())
 
         if let cache = priorDaysCache, cache.dayStart == startOfToday {
@@ -235,6 +240,23 @@ class HealthKitManager: ObservableObject {
         let total = prior + Int(currentSteps)
         setCumulative(total)
         return total
+    }
+
+    /// Screenshot demo values in place of HealthKit (the simulator has no step data).
+    private func applyDemoData() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var map: [Date: Int] = [:]
+        for offset in 1...6 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            map[day] = LaunchFlags.Demo.pastDays[LaunchFlags.Demo.pastDays.count - offset]
+        }
+        map[today] = LaunchFlags.Demo.todaySteps
+        stepsBeforeNoon = 2_100
+        stepsSinceFivePM = nil
+        if dailyStepsLast7Days != map { dailyStepsLast7Days = map }
+        if currentSteps != Double(LaunchFlags.Demo.todaySteps) { currentSteps = Double(LaunchFlags.Demo.todaySteps) }
+        setCumulative(LaunchFlags.Demo.cumulativeSteps)
     }
 
     /// Invalidates the cumulative cache (call when user pulls to refresh).

@@ -72,5 +72,23 @@ private extension View {
     func tabScreenBackground() -> some View {
         frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.backgroundGradient.ignoresSafeArea())
+            // Content fades out behind the floating tab bar instead of reading through the glass
+            // as overlapping text (most visible at large text sizes).
+            .overlay(alignment: .bottom) {
+                GeometryReader { proxy in
+                    VStack {
+                        Spacer(minLength: 0)
+                        LinearGradient(
+                            colors: [Theme.bgDeep.opacity(0), Theme.bgDeep.opacity(0.92), Theme.bgDeep],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: proxy.safeAreaInsets.bottom + Space.xl)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
     }
 }

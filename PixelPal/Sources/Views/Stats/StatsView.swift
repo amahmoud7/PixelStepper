@@ -181,6 +181,27 @@ private struct PhaseProgressCard: View {
             .accessibilityAddTraits(.isHeader)
     }
 
+    private var stepCount: some View {
+        Text(weeklySteps.formatted())
+            .font(.ppStat)
+            .foregroundColor(Theme.textPrimary)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .layoutPriority(1)
+            .numericRoll(value: weeklySteps)
+    }
+
+    private var percentText: some View {
+        Text("\(Int(progress * 100))%")
+            .font(.ppBody.weight(.bold))
+            .foregroundColor(progressTextColor)
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
+            .numericRoll(value: progress)
+    }
+
     private var phaseLabel: some View {
         Text("Phase \(currentPhase) · \(phaseName)")
             .font(.ppCaption.weight(.semibold))
@@ -205,26 +226,29 @@ private struct PhaseProgressCard: View {
 
             if currentPhase < 4 {
                 // Step count display
-                HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
-                    Text(weeklySteps.formatted())
-                        .font(.ppStat)
-                        .foregroundColor(Theme.textPrimary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .layoutPriority(1)
-                        .numericRoll(value: weeklySteps)
-                    Text("/ \(nextThreshold.formatted()) steps")
-                        .font(.ppBody)
-                        .foregroundColor(Theme.textSecondary)
-                    Spacer()
-                    Text("\(Int(progress * 100))%")
-                        .font(.ppBody.weight(.bold))
-                        .foregroundColor(progressTextColor)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .fixedSize()
-                        .numericRoll(value: progress)
+                // One row when it fits; otherwise the count and "of N steps" stack instead of
+                // the target wrapping word by word under the number.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
+                        stepCount
+                        Text("/ \(nextThreshold.formatted()) steps")
+                            .font(.ppBody)
+                            .foregroundColor(Theme.textSecondary)
+                            .lineLimit(1)
+                            .fixedSize()
+                        Spacer(minLength: Space.s)
+                        percentText
+                    }
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        HStack(alignment: .firstTextBaseline) {
+                            stepCount
+                            Spacer(minLength: Space.s)
+                            percentText
+                        }
+                        Text("of \(nextThreshold.formatted()) steps")
+                            .font(.ppBody)
+                            .foregroundColor(Theme.textSecondary)
+                    }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(weeklySteps.formatted()) of \(nextThreshold.formatted()) steps this week")

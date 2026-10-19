@@ -77,16 +77,19 @@ struct MilestoneCalculator {
     }
 
     /// Formats a milestone for display (e.g., "5k!", "100k!").
-    /// - Parameter milestone: The milestone value.
-    /// - Returns: Formatted string for display.
     static func formatMilestone(_ milestone: Int) -> String {
+        shortMilestone(milestone) + "!"
+    }
+
+    /// Compact milestone without punctuation ("5k", "2.5k", "1M").
+    static func shortMilestone(_ milestone: Int) -> String {
         let oneDecimal = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...1))
         if milestone >= 1_000_000 {
-            return "\((Double(milestone) / 1_000_000).formatted(oneDecimal))M!"
+            return "\((Double(milestone) / 1_000_000).formatted(oneDecimal))M"
         } else if milestone >= 1_000 {
-            return "\((Double(milestone) / 1_000).formatted(oneDecimal))k!"
+            return "\((Double(milestone) / 1_000).formatted(oneDecimal))k"
         } else {
-            return "\(milestone)!"
+            return "\(milestone)"
         }
     }
 }

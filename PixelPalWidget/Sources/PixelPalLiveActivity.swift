@@ -237,6 +237,9 @@ private struct CompactTrailingView: View {
                     .fill(stateColor(for: context.state.stateRaw))
                     .frame(width: 6, height: 6)
             }
+            // The dot's color carries the energy state; say it.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(context.state.steps.formatted()) steps, \(stateLabel(for: context.state.stateRaw))")
         }
     }
 }
@@ -346,6 +349,7 @@ private struct ExpandedTrailingView: View {
                     .foregroundColor(WidgetPalette.secondaryText)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -360,6 +364,7 @@ private struct ExpandedCenterView: View {
                 .foregroundColor(phaseColor(for: context.state.currentPhase))
                 .accessibilityHidden(true)
             Text("Phase \(context.state.currentPhase) • \(phaseName(for: context.state.currentPhase))")
+                .accessibilityLabel("Phase \(context.state.currentPhase), \(phaseName(for: context.state.currentPhase))")
                 .font(.caption2.weight(.medium))
                 .foregroundColor(phaseColor(for: context.state.currentPhase))
                 .lineLimit(1)
@@ -411,6 +416,7 @@ private struct ExpandedBottomView: View {
             // Progress labels — h=13
             HStack {
                 Text("\(context.state.steps.formatted()) / \(Int(dailyGoal).formatted())")
+                    .accessibilityLabel("\(context.state.steps.formatted()) of \(Int(dailyGoal).formatted()) steps")
                     .font(.caption2)
                     .foregroundColor(WidgetPalette.secondaryText)
 
@@ -489,6 +495,8 @@ private struct WeekDotsView: View {
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("This week, \(weekData.filter { $0 >= 7500 }.count) of 7 days at goal")
     }
 
     private func dotColor(goalMet: Bool, isToday: Bool, hasData: Bool) -> Color {

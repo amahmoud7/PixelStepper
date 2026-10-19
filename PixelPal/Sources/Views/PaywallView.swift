@@ -46,7 +46,7 @@ struct PaywallView: View {
                     // Evolution timeline
                     EvolutionTimeline(gender: gender, currentPhase: currentPhase)
                         .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 16)
+                        .offset(y: appeared || reduceMotion ? 0 : 16)
 
                     Spacer().frame(height: Space.xl)
 
@@ -212,14 +212,16 @@ struct PaywallView: View {
                         : [Theme.surfaceStrong, Theme.surface]
                 ))
                 .disabled(selectedProduct == nil || isPurchasing)
+                .accessibilityLabel(isPurchasing ? "Purchasing" : purchaseButtonTitle)
 
                 // Price disclosure directly under the CTA
-                if let disclosure = priceDisclosure {
+                if let disclosure = priceDisclosure(spoken: false) {
                     Text(disclosure)
                         .font(.ppCaption)
                         .foregroundColor(Theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(priceDisclosure(spoken: true) ?? disclosure)
                 }
 
                 if storeManager.purchaseIsPending {
@@ -298,9 +300,10 @@ struct PaywallView: View {
     }
 
     /// "1 week free, then $29.99/year. Cancel anytime in Settings."
-    private var priceDisclosure: String? {
+    /// `spoken` swaps "/year" for "per year" (VoiceOver reads the slash).
+    private func priceDisclosure(spoken: Bool) -> String? {
         guard let product = selectedProduct else { return nil }
-        let price = "\(product.displayPrice)\(periodSuffix(for: product))"
+        let price = "\(product.displayPrice)\(periodSuffix(for: product, spoken: spoken))"
         let renewal = "Auto-renews unless cancelled at least 24 hours before the period ends."
         if let trial = selectedTrialLength {
             return "\(trial) free, then \(price). Cancel anytime in Settings. \(renewal)"
@@ -309,10 +312,12 @@ struct PaywallView: View {
     }
 
     /// "/year", "/month", "/3 months"; empty for non-subscription products.
-    private func periodSuffix(for product: Product) -> String {
+    private func periodSuffix(for product: Product, spoken: Bool = false) -> String {
         guard let period = product.subscription?.subscriptionPeriod,
               let unit = PeriodUnit(period.unit) else { return "" }
-        return PeriodText.perPeriod(period.value, unit)
+        return spoken
+            ? " " + PeriodText.spokenPerPeriod(period.value, unit)
+            : PeriodText.perPeriod(period.value, unit)
     }
 
     // MARK: - Actions

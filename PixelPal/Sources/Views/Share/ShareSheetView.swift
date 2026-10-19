@@ -91,7 +91,7 @@ struct ShareSheetView: View {
                     )
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Card preview")
+                    .accessibilityLabel("\(cardType.title) card preview, \(format.title), \(background.title) background")
 
                     actionButtons
                 }

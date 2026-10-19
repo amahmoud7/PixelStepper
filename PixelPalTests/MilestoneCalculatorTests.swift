@@ -19,4 +19,20 @@ final class MilestoneCalculatorTests: XCTestCase {
         XCTAssertNotEqual(format(7_500), format(7_000), "7,500 must not render as 7k")
         XCTAssertTrue(format(100_000).hasSuffix("!"))
     }
+
+    func test_shortMilestone_hasNoExclamation() {
+        XCTAssertFalse(MilestoneCalculator.shortMilestone(100_000).contains("!"))
+        XCTAssertEqual(MilestoneCalculator.formatMilestone(100_000), MilestoneCalculator.shortMilestone(100_000) + "!")
+    }
+
+    func test_stepMilestoneTitle_singleExclamation() {
+        let title = CelebrationEvent.stepMilestone(cumulative: 100_000).title
+        XCTAssertEqual(title.filter { $0 == "!" }.count, 1, title)
+    }
+
+    func test_stepMilestoneSpokenTitle_spellsOutNumber() {
+        let spoken = CelebrationEvent.stepMilestone(cumulative: 100_000).spokenTitle
+        XCTAssertTrue(spoken.contains(100_000.formatted()), spoken)
+        XCTAssertEqual(CelebrationEvent.dailyGoalMet(steps: 8000).spokenTitle, CelebrationEvent.dailyGoalMet(steps: 8000).title)
+    }
 }

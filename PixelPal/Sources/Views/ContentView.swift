@@ -193,6 +193,8 @@ struct PhaseDisplayView: View {
         .padding(.horizontal, Space.l)
         .padding(.vertical, Space.s)
         .background(phaseColor.opacity(0.2), in: Capsule())
-        .accessibilityElement(children: .combine)
+        // Explicit: "•" is spoken as "bullet", and the compact variant drops the name.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Phase \(phase), \(phaseName)" + (isPremium ? ", Premium" : ""))
     }
 }

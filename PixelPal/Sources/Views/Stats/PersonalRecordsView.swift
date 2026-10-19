@@ -43,6 +43,7 @@ struct PersonalRecordsView: View {
                     icon: "figure.walk",
                     color: Theme.mint,
                     value: formatLargeNumber(progress.totalStepsSinceStart),
+                    spokenValue: progress.totalStepsSinceStart.formatted(),
                     label: "Total steps",
                     subtitle: "All time"
                 )
@@ -78,7 +79,7 @@ struct PersonalRecordsView: View {
     }
 
     @ViewBuilder
-    private func recordCard(icon: String, color: Color, value: String, label: String, subtitle: String) -> some View {
+    private func recordCard(icon: String, color: Color, value: String, spokenValue: String? = nil, label: String, subtitle: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.ppStat)
@@ -106,7 +107,7 @@ struct PersonalRecordsView: View {
         .frame(maxWidth: .infinity)
         .ppCard(padding: Space.m, radius: Radius.row)
         .accessibilityElement(children: .ignore)
-        // "—" would be read as "em dash".
-        .accessibilityLabel("\(label), \(value == "—" ? "No data yet" : value), \(subtitle)")
+        // "—" would be read as "em dash"; "12.3K" as "12.3 K".
+        .accessibilityLabel("\(label), \(spokenValue ?? (value == "—" ? "No data yet" : value)), \(subtitle)")
     }
 }

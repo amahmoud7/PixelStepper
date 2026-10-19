@@ -72,6 +72,7 @@ private struct ThisWeekCard: View {
                 Text("\(daysAtGoal) of 7 days at goal · \(totalSteps.formatted()) steps")
                     .font(.ppCaption)
                     .foregroundColor(Theme.textSecondary)
+                    .accessibilityLabel("\(daysAtGoal) of 7 days at goal, \(totalSteps.formatted()) steps")
             }
 
             Chart {
@@ -206,6 +207,7 @@ private struct PhaseProgressCard: View {
         Text("Phase \(currentPhase) · \(phaseName)")
             .font(.ppCaption.weight(.semibold))
             .foregroundColor(progressTextColor)
+            .accessibilityLabel("Phase \(currentPhase), \(phaseName)")
     }
 
     var body: some View {
@@ -296,6 +298,7 @@ private struct PhaseProgressCard: View {
                 } else {
                     let remaining = max(0, nextThreshold - weeklySteps)
                     Text("\(remaining.formatted()) steps to \(nextPhaseName) · resets weekly")
+                        .accessibilityLabel("\(remaining.formatted()) steps to \(nextPhaseName), resets weekly")
                         .font(.ppMicro)
                         .foregroundColor(Theme.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)

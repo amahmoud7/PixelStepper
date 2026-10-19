@@ -73,9 +73,9 @@ struct HomeView: View {
                 LinearGradient(colors: [Theme.bgDeep, Theme.bgDeep.opacity(0)], startPoint: .top, endPoint: .bottom)
                     .frame(height: proxy.safeAreaInsets.top + Space.l)
                     .ignoresSafeArea(edges: .top)
-                    .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
+            .allowsHitTesting(false)
         }
     }
 

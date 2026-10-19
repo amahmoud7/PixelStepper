@@ -79,21 +79,28 @@ private struct AnimatedSpriteView: View {
 
 // MARK: - Color Helpers
 
-private func phaseColor(for phase: Int) -> Color {
-    switch phase {
-    case 1: return Color(white: 0.7)
-    case 2: return .blue
-    case 3: return .purple
-    case 4: return .orange
-    default: return Color(white: 0.7)
-    }
+/// Mirrors the app's Theme RGB values (the widget target can't see Theme).
+private enum WidgetPalette {
+    static let purple = Color(red: 0.49, green: 0.36, blue: 0.99)
+    static let mint = Color(red: 0.2, green: 0.78, blue: 0.35)
+    static let gold = Color(red: 1.0, green: 0.84, blue: 0.0)
+    static let amber = Color(red: 1.0, green: 0.6, blue: 0.0)
+    static let blue = Color(red: 0.0, green: 0.48, blue: 1.0)
+    static let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
+    /// Soft amber for days below goal, instead of an alarming red.
+    static let belowGoal = Color(red: 1.0, green: 0.7, blue: 0.3).opacity(0.6)
+    /// Secondary text on the black activity background (meaningful text stays >= 0.6).
+    static let secondaryText = Color.white.opacity(0.7)
 }
 
-/// Secondary text on the black activity background (meaningful text stays >= 0.6).
-private let secondaryText = Color.white.opacity(0.7)
-
-/// Soft amber for days below goal, instead of an alarming red.
-private let softAmber = Color(red: 1.0, green: 0.7, blue: 0.3)
+private func phaseColor(for phase: Int) -> Color {
+    switch phase {
+    case 2: return WidgetPalette.blue
+    case 3: return WidgetPalette.purple
+    case 4: return WidgetPalette.amber
+    default: return Color(white: 0.6)
+    }
+}
 
 private func stateLabel(for stateRaw: String) -> String {
     (AvatarState(rawValue: stateRaw) ?? .neutral).description
@@ -101,10 +108,10 @@ private func stateLabel(for stateRaw: String) -> String {
 
 private func stateColor(for stateRaw: String) -> Color {
     switch stateRaw {
-    case "vital": return .green
-    case "neutral": return Color(red: 0.35, green: 0.78, blue: 0.98)
-    case "low": return .orange
-    default: return .gray
+    case "vital": return WidgetPalette.mint
+    case "neutral": return WidgetPalette.cyan
+    case "low": return WidgetPalette.amber
+    default: return Color(white: 0.6)
     }
 }
 
@@ -131,10 +138,26 @@ private func phaseName(for phase: Int) -> String {
 private let dailyGoal: Double = 7500.0
 
 // MARK: - Lock Screen Live Activity
-// Export: char (14,16) 50x56, steps (76,22) 100x20, stateInfo (76,48) 180x14
+// Fixed 56pt sprite so the layout stays put when isWalking toggles.
+// Right column: steps (headline) → goal progress bar → "N to goal · Phase" (footnote).
 
 private struct LockScreenView: View {
     let context: ActivityViewContext<PixelStepperAttributes>
+
+    private var phase: Int { context.state.currentPhase }
+
+    private var goalProgress: Double {
+        min(1, max(0, Double(context.state.steps) / dailyGoal))
+    }
+
+    private var goalText: String {
+        let remaining = max(0, Int(dailyGoal) - context.state.steps)
+        return remaining == 0 ? "Goal reached" : "\(remaining.formatted()) to goal"
+    }
+
+    private var phaseText: String {
+        "Phase \(phase) \(phaseName(for: phase))"
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -142,39 +165,36 @@ private struct LockScreenView: View {
                 genderRaw: context.state.genderRaw,
                 stateRaw: context.state.stateRaw,
                 isWalking: context.state.isWalking,
-                size: context.state.isWalking ? 80 : 50
+                size: 56
             )
+            .frame(width: 56, height: 56)
 
             VStack(alignment: .leading, spacing: 6) {
-                if let milestone = context.state.milestoneText {
-                    Text(milestone)
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.green)
-                } else {
-                    Text("\(context.state.steps.formatted()) steps")
-                        .font(.headline)
-                        .foregroundColor(.white)
+                Group {
+                    if let milestone = context.state.milestoneText {
+                        Text(milestone)
+                            .fontWeight(.bold)
+                            .foregroundColor(WidgetPalette.gold)
+                    } else {
+                        Text("\(context.state.steps.formatted()) steps")
+                            .foregroundColor(.white)
+                    }
                 }
+                .font(.headline)
+                .lineLimit(1)
 
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(stateColor(for: context.state.stateRaw))
-                        .frame(width: 5, height: 5)
-                    Text(stateLabel(for: context.state.stateRaw))
-                        .font(.system(size: 11))
-                        .foregroundColor(secondaryText)
-                    Text("•")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.3))
-                        .accessibilityHidden(true)
-                    Text("Phase \(context.state.currentPhase)")
-                        .font(.system(size: 11))
-                        .foregroundColor(phaseColor(for: context.state.currentPhase))
-                }
+                ProgressView(value: goalProgress)
+                    .tint(phaseColor(for: phase))
+
+                Text("\(goalText) · \(phaseText)")
+                    .font(.footnote)
+                    .foregroundColor(WidgetPalette.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .accessibilityLabel("\(goalText), \(phaseText)")
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
         .padding(.horizontal, 14)
@@ -206,7 +226,7 @@ private struct CompactTrailingView: View {
             Text(milestone)
                 .font(.caption)
                 .fontWeight(.bold)
-                .foregroundColor(.green)
+                .foregroundColor(WidgetPalette.gold)
         } else {
             HStack(spacing: 4) {
                 Text(context.state.steps.formatted())
@@ -313,7 +333,7 @@ private struct ExpandedTrailingView: View {
             if let milestone = context.state.milestoneText {
                 Text(milestone)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.green)
+                    .foregroundColor(WidgetPalette.gold)
             } else {
                 Text(context.state.steps.formatted())
                     .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -323,7 +343,7 @@ private struct ExpandedTrailingView: View {
 
                 Text("steps")
                     .font(.caption2)
-                    .foregroundColor(secondaryText)
+                    .foregroundColor(WidgetPalette.secondaryText)
             }
         }
     }
@@ -392,14 +412,14 @@ private struct ExpandedBottomView: View {
             HStack {
                 Text("\(context.state.steps.formatted()) / \(Int(dailyGoal).formatted())")
                     .font(.caption2)
-                    .foregroundColor(secondaryText)
+                    .foregroundColor(WidgetPalette.secondaryText)
 
                 Spacer()
 
                 if goalProgress >= 1.0 {
                     Text("Goal reached!")
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.green)
+                        .foregroundColor(WidgetPalette.mint)
                 } else {
                     Text("\(stepsRemaining.formatted()) to go")
                         .font(.caption2.weight(.medium))
@@ -445,7 +465,7 @@ private struct WeekDotsView: View {
         HStack {
             Text("This week")
                 .font(.caption2)
-                .foregroundColor(secondaryText)
+                .foregroundColor(WidgetPalette.secondaryText)
 
             Spacer()
 
@@ -473,11 +493,11 @@ private struct WeekDotsView: View {
 
     private func dotColor(goalMet: Bool, isToday: Bool, hasData: Bool) -> Color {
         if isToday {
-            return goalMet ? Color.green : Color.blue
+            return goalMet ? WidgetPalette.mint : WidgetPalette.blue
         }
         if !hasData {
             return Color.white.opacity(0.1)
         }
-        return goalMet ? Color.green : softAmber.opacity(0.6)
+        return goalMet ? WidgetPalette.mint : WidgetPalette.belowGoal
     }
 }

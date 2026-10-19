@@ -106,21 +106,32 @@ struct SimpleEntry: TimelineEntry {
 
 // MARK: - Color & Phase Helpers
 
+/// Mirrors the app's Theme RGB values (the widget target can't see Theme).
+private enum WidgetPalette {
+    static let purple = Color(red: 0.49, green: 0.36, blue: 0.99)
+    static let mint = Color(red: 0.2, green: 0.78, blue: 0.35)
+    static let gold = Color(red: 1.0, green: 0.84, blue: 0.0)
+    static let amber = Color(red: 1.0, green: 0.6, blue: 0.0)
+    static let blue = Color(red: 0.0, green: 0.48, blue: 1.0)
+    static let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
+    /// Soft amber for days below goal, instead of an alarming red.
+    static let belowGoal = Color(red: 1.0, green: 0.7, blue: 0.3).opacity(0.6)
+}
+
 private func widgetStateColor(for state: AvatarState) -> Color {
     switch state {
-    case .vital: return .green
-    case .neutral: return Color(red: 0.35, green: 0.78, blue: 0.98)
-    case .low: return .orange
+    case .vital: return WidgetPalette.mint
+    case .neutral: return WidgetPalette.cyan
+    case .low: return WidgetPalette.amber
     }
 }
 
 private func widgetPhaseColor(for phase: Int) -> Color {
     switch phase {
-    case 1: return Color(white: 0.7)
-    case 2: return Color(red: 0.4, green: 0.6, blue: 1.0)
-    case 3: return Color(red: 0.7, green: 0.4, blue: 1.0)
-    case 4: return .orange
-    default: return Color(white: 0.7)
+    case 2: return WidgetPalette.blue
+    case 3: return WidgetPalette.purple
+    case 4: return WidgetPalette.amber
+    default: return Color(white: 0.6)
     }
 }
 
@@ -144,9 +155,36 @@ private func widgetPhaseName(for phase: Int) -> String {
     }
 }
 
-/// Soft amber for days below goal, instead of an alarming red.
-private var widgetSoftAmber: Color {
-    Color(red: 1.0, green: 0.7, blue: 0.3)
+private func widgetGoalProgress(for steps: Int) -> Double {
+    min(1, max(0, Double(steps) / 7500.0))
+}
+
+/// Rounded goal bar: white track with a state → phase gradient fill.
+private struct WidgetProgressBar: View {
+    let progress: Double
+    let state: AvatarState
+    let phase: Int
+    var height: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.white.opacity(0.2))
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [widgetStateColor(for: state), widgetPhaseColor(for: phase)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(height, geo.size.width * progress))
+            }
+        }
+        .frame(height: height)
+    }
 }
 
 private func widgetEnergyLabel(for state: AvatarState) -> String {
@@ -225,7 +263,7 @@ struct PixelPalSmallWidgetView: View {
             }
             .frame(width: 80, height: 80)
 
-            Spacer().frame(height: 6)
+            Spacer().frame(height: 4)
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(entry.steps.formatted())
@@ -239,6 +277,15 @@ struct PixelPalSmallWidgetView: View {
                     .foregroundStyle(Color.white.opacity(0.6))
             }
             .frame(height: 24)
+
+            Spacer().frame(height: 4)
+
+            WidgetProgressBar(
+                progress: widgetGoalProgress(for: entry.steps),
+                state: entry.state,
+                phase: entry.phase
+            )
+            .frame(width: 100)
 
             Spacer().frame(height: 4)
 
@@ -506,12 +553,12 @@ struct PixelPalLargeWidgetView: View {
             }
             .frame(width: 100, height: 100)
 
-            Spacer().frame(height: 8)
+            Spacer().frame(height: 6)
 
-            // Steps hero number — h=42
+            // Steps hero number + state capsule — sized to fit (~57pt)
             VStack(spacing: 2) {
                 Text(entry.steps.formatted())
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -525,9 +572,8 @@ struct PixelPalLargeWidgetView: View {
                     .background(widgetStateColor(for: entry.state).opacity(0.25))
                     .clipShape(Capsule())
             }
-            .frame(height: 42)
 
-            Spacer().frame(height: 12)
+            Spacer().frame(height: 8)
 
             // Daily progress bar — h=6
             GeometryReader { geometry in
@@ -561,7 +607,7 @@ struct PixelPalLargeWidgetView: View {
                 if dailyProgress >= 1.0 {
                     Text("Goal reached!")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(WidgetPalette.mint)
                 } else {
                     Text("\(max(0, 7500 - entry.steps).formatted()) to go")
                         .font(.system(size: 11, weight: .medium))
@@ -657,8 +703,8 @@ private struct MiniBarChart: View {
 
     private func barColor(steps: Int, isToday: Bool) -> Color {
         if isToday { return Color.gray }
-        if steps >= 7500 { return .green }
-        if steps > 0 { return widgetSoftAmber.opacity(0.6) }
+        if steps >= 7500 { return WidgetPalette.mint }
+        if steps > 0 { return WidgetPalette.belowGoal }
         return Color.white.opacity(0.15)
     }
 }
@@ -686,8 +732,8 @@ private struct WeekBarChart: View {
 
     private func barColor(steps: Int, isToday: Bool) -> Color {
         if isToday { return Color.gray }
-        if steps >= 7500 { return .green }
-        if steps > 0 { return widgetSoftAmber.opacity(0.6) }
+        if steps >= 7500 { return WidgetPalette.mint }
+        if steps > 0 { return WidgetPalette.belowGoal }
         return Color.white.opacity(0.15)
     }
 }
@@ -736,12 +782,12 @@ private struct WidgetWeekDotsView: View {
 
     private func dotColor(goalMet: Bool, isToday: Bool, hasData: Bool) -> Color {
         if isToday {
-            return goalMet ? Color.green : Color.blue
+            return goalMet ? WidgetPalette.mint : WidgetPalette.blue
         }
         if !hasData {
             return Color.white.opacity(0.2)
         }
-        return goalMet ? Color.green : widgetSoftAmber.opacity(0.6)
+        return goalMet ? WidgetPalette.mint : WidgetPalette.belowGoal
     }
 }
 
@@ -755,10 +801,6 @@ struct PixelPalAccessoryCircularView: View {
         return (minute % 2) + 1
     }
 
-    private var goalProgress: Double {
-        min(Double(entry.steps) / 7500.0, 1.0)
-    }
-
     var body: some View {
         let spriteName = SpriteAssets.spriteName(
             gender: entry.gender,
@@ -766,22 +808,16 @@ struct PixelPalAccessoryCircularView: View {
             frame: frameNumber
         )
 
-        ZStack {
-            AccessoryWidgetBackground()
-
-            // Progress arc
-            Circle()
-                .trim(from: 0, to: goalProgress)
-                .stroke(style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .padding(2)
-
+        Gauge(value: widgetGoalProgress(for: entry.steps)) {
+            EmptyView()
+        } currentValueLabel: {
             Image(decorative: spriteName)
                 .resizable()
                 .interpolation(.none)
                 .aspectRatio(contentMode: .fit)
-                .padding(6)
+                .padding(2)
         }
+        .gaugeStyle(.accessoryCircularCapacity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(widgetAccessibilityLabel(for: entry))
     }
@@ -843,7 +879,7 @@ struct PixelPalAccessoryInlineView: View {
     var entry: Provider.Entry
 
     var body: some View {
-        Label("Pixel Stepper Phase \(entry.phase)", systemImage: widgetPhaseIcon(for: entry.phase))
+        Label("\(entry.steps.formatted()) steps", systemImage: "figure.walk")
     }
 }
 

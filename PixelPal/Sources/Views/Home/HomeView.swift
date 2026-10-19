@@ -1,3 +1,4 @@
+import ActivityKit
 import SwiftUI
 
 /// Home tab: Avatar + streak hero + daily missions + step count.
@@ -5,6 +6,7 @@ struct HomeView: View {
     @EnvironmentObject var appState: AppStateManager
     @EnvironmentObject var healthManager: HealthKitManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("liveActivityCardDismissed") private var liveActivityCardDismissed = false
 
     private var todaySteps: Int { Int(healthManager.currentSteps) }
 
@@ -21,10 +23,17 @@ struct HomeView: View {
                         .padding(.horizontal, Space.screen)
                 }
 
-                // "Not seeing steps?" help (shows when authorized but 0 steps for a while)
-                if healthManager.isAuthorized && healthManager.currentSteps == 0 && hasProfile {
+                // "Not seeing steps?" help: still 0 steps late enough in the day that it's probably access, not sleep
+                if healthManager.isAuthorized && healthManager.currentSteps == 0 && hasProfile && isLateEnoughForStepsHelp {
                     stepsHelpBanner
                         .padding(.horizontal, Space.screen)
+                }
+
+                // One-time Lock Screen invitation
+                if showsLiveActivityCard {
+                    liveActivityCard
+                        .padding(.horizontal, Space.screen)
+                        .transition(.opacity)
                 }
 
                 // Hero avatar
@@ -91,6 +100,78 @@ struct HomeView: View {
 
     private var hasProfile: Bool {
         PersistenceManager.shared.userProfile != nil
+    }
+
+    /// 0 steps before 11:00 is usually just an early morning.
+    private var isLateEnoughForStepsHelp: Bool {
+        Calendar.current.component(.hour, from: Date()) >= 11
+    }
+
+    // MARK: - Live Activity Card
+
+    private var showsLiveActivityCard: Bool {
+        appState.isOnboardingComplete
+            && !appState.liveActivityManager.isActive
+            && !liveActivityCardDismissed
+            && ActivityAuthorizationInfo().areActivitiesEnabled
+    }
+
+    private var liveActivityCard: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack(alignment: .top, spacing: Space.m) {
+                Image(systemName: "lock.iphone")
+                    .font(.title2)
+                    .foregroundColor(Theme.purpleText)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text("Put your character on your Lock Screen")
+                        .font(.ppSection)
+                        .foregroundColor(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("See your steps every time you glance at your phone.")
+                        .font(.ppBody)
+                        .foregroundColor(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+
+            Button {
+                // Starting flips isActive (synchronously), which hides this card.
+                withMotion(Motion.snappy, reduceMotion: reduceMotion) {
+                    appState.liveActivityManager.startActivity(
+                        steps: Int(healthManager.currentSteps),
+                        state: appState.avatarState,
+                        gender: appState.gender,
+                        phase: appState.currentPhase
+                    )
+                }
+                if appState.liveActivityManager.isActive {
+                    Haptics.success()
+                } else {
+                    Haptics.warning()
+                }
+            } label: {
+                Text("Start Live Activity")
+            }
+            .buttonStyle(PPPrimaryButtonStyle())
+
+            Button {
+                Haptics.soft()
+                withMotion(Motion.snappy, reduceMotion: reduceMotion) {
+                    liveActivityCardDismissed = true
+                }
+            } label: {
+                Text("Not now")
+                    .font(.ppRowTitle)
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(maxWidth: .infinity)
+                    .minTapTarget()
+            }
+            .buttonStyle(.plain)
+        }
+        .ppCard(tint: Theme.purple)
     }
 
     /// Shows when HealthKit is not available on the device (iPad, etc.)

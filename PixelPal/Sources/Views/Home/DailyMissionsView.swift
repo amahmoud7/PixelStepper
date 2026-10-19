@@ -4,9 +4,11 @@ import SwiftUI
 struct DailyMissionsView: View {
     @EnvironmentObject var appState: AppStateManager
     @State private var lastCompleted: Int?
+    /// Observed so the coin balance updates live.
+    @ObservedObject private var persistence = PersistenceManager.shared
 
     private var coinBalance: Int {
-        PersistenceManager.shared.progressState.stepCoinBalance
+        persistence.progressState.stepCoinBalance
     }
 
     private var allMissionsCompleted: Bool {

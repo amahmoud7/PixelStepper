@@ -164,7 +164,7 @@ struct SplashScreenView: View {
         }
 
         // Phase 2: Rings appear and rotate (rotation skipped under Reduce Motion)
-        withMotion(Motion.smooth.delay(0.2), reduceMotion: reduceMotion) {
+        withMotion(Motion.smooth.delay(0.05), reduceMotion: reduceMotion) {
             ringOpacity = 1.0
         }
         if !reduceMotion {
@@ -174,32 +174,32 @@ struct SplashScreenView: View {
         }
 
         // Phase 3: Characters spring in
-        withMotion(Motion.bouncy.delay(0.3), reduceMotion: reduceMotion) {
+        withMotion(Motion.bouncy.delay(0.08), reduceMotion: reduceMotion) {
             characterOpacity = 1.0
             characterScale = 1.0
         }
 
         // Phase 4: Logo slides up
-        withMotion(Motion.smooth.delay(0.5), reduceMotion: reduceMotion) {
+        withMotion(Motion.smooth.delay(0.12), reduceMotion: reduceMotion) {
             logoOpacity = 1.0
             logoOffset = 0
         }
 
         // Phase 5: Subtitle
-        withMotion(Motion.smooth.delay(0.7), reduceMotion: reduceMotion) {
+        withMotion(Motion.smooth.delay(0.18), reduceMotion: reduceMotion) {
             subtitleOpacity = 1.0
         }
 
-        // Phase 6: Hold for a beat, then exit
+        // Phase 6: Short hold, then exit. Whole splash is ~0.8s (0.55s hold + 0.25s exit).
         exitTask?.cancel()
         exitTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            try? await Task.sleep(nanoseconds: 550_000_000)
             guard !Task.isCancelled else { return }
             withMotion(Motion.exit, reduceMotion: reduceMotion) {
                 if !reduceMotion { exitScale = 1.08 }
                 exitOpacity = 0
             }
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled else { return }
             onFinished()
         }

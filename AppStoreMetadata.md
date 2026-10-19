@@ -130,7 +130,7 @@ https://github.com/amahmoud7/PixelStepper/issues
 
 ### Monthly Premium ($2.99/month)
 **Display Name:** Monthly Premium
-**Description:** Unlock all phases, 2x coins & premium share cards
+**Description:** All 4 phases, 5 daily missions & streak freeze
 
 ### Yearly Premium ($19.99/year)
 **Display Name:** Yearly Premium

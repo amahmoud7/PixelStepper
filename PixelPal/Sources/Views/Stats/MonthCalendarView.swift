@@ -36,7 +36,7 @@ struct MonthCalendarView: View {
                 // Leading spacer cells to align with weekday
                 ForEach(0..<leadingSpacers(for: days), id: \.self) { _ in
                     Color.clear
-                        .frame(height: 24)
+                        .aspectRatio(1, contentMode: .fit)
                         .accessibilityHidden(true)
                 }
 
@@ -86,21 +86,20 @@ struct MonthCalendarView: View {
     @ViewBuilder
     private func calendarCell(for day: CalendarDay) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(cellColor(for: day))
-                .frame(height: 24)
 
             if day.isToday {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(Theme.textSecondary, lineWidth: 1.5)
-                    .frame(height: 24)
             }
 
-            // Fixed size: the cell is a fixed 24pt square.
+            // Fixed size: cells are small squares sized by the grid, not by text.
             Text("\(day.dayNumber)")
                 .font(.system(size: 11, weight: day.isToday ? .bold : .medium))
                 .foregroundColor(day.hasData || day.isToday ? Theme.textPrimary : Theme.textTertiary)
         }
+        .aspectRatio(1, contentMode: .fit)
         .overlay(alignment: .topTrailing) {
             // Met vs below goal must not rely on color alone.
             if differentiateWithoutColor && day.goalMet {

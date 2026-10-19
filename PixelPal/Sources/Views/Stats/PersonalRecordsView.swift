@@ -1,9 +1,12 @@
 import SwiftUI
 
-/// Grid of personal bests: best day, longest streak, total steps, active days.
+/// Grid of personal bests: best day, longest streak, total steps, goal days.
 struct PersonalRecordsView: View {
+    /// Observed so the records re-render when progress is saved (a computed read alone wouldn't).
+    @ObservedObject private var persistence = PersistenceManager.shared
+
     private var progress: ProgressState {
-        PersistenceManager.shared.progressState
+        persistence.progressState
     }
 
     var body: some View {
@@ -33,7 +36,7 @@ struct PersonalRecordsView: View {
                     color: Theme.amber,
                     value: "\(progress.longestStreak)",
                     label: "Longest streak",
-                    subtitle: progress.longestStreak > 0 ? "\(progress.longestStreak) days" : "Start walking!"
+                    subtitle: streakSubtitle
                 )
 
                 recordCard(
@@ -48,12 +51,20 @@ struct PersonalRecordsView: View {
                     icon: "calendar",
                     color: Theme.blue,
                     value: "\(progress.totalActiveDays)",
-                    label: "Active days",
-                    subtitle: "Goals met"
+                    label: "Goal days",
+                    subtitle: "All time"
                 )
             }
         }
         .glassCard()
+    }
+
+    private var streakSubtitle: String {
+        switch progress.longestStreak {
+        case 0: return "Start walking!"
+        case 1: return "day in a row"
+        default: return "days in a row"
+        }
     }
 
     private var bestDaySubtitle: String {

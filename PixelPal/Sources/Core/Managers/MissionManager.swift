@@ -8,6 +8,8 @@ class MissionManager: ObservableObject {
 
     private let persistence = PersistenceManager.shared
     private let dailyGoal = 7500
+    /// Last average used for generation, reused when missions roll over at midnight.
+    private var lastWeeklyAverage = 3000
 
     private var todayString: String {
         DailyGoalState.dayKey(for: Date())
@@ -24,6 +26,7 @@ class MissionManager: ObservableObject {
 
     /// Loads existing missions for today or generates new ones. Also loads weekly challenge for premium.
     func loadOrGenerateMissions(weeklyAverage: Int) {
+        lastWeeklyAverage = weeklyAverage
         loadOrGenerateWeeklyChallenge(weeklyAverage: weeklyAverage)
         let isPremium = PersistenceManager.shared.entitlements.isPremium
         let expectedCount = isPremium ? 5 : 3
@@ -32,8 +35,15 @@ class MissionManager: ObservableObject {
             if saved.missions.count == expectedCount {
                 missions = saved.missions
             } else {
-                // Premium status changed mid-day — regenerate with correct count
-                missions = generateMissions(weeklyAverage: max(weeklyAverage, 3000), isPremium: isPremium)
+                // Premium status changed mid-day — regenerate with correct count, keeping
+                // progress on missions that carry over (otherwise their coins pay out twice).
+                let previous = Dictionary(saved.missions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+                missions = generateMissions(weeklyAverage: max(weeklyAverage, 3000), isPremium: isPremium).map { fresh in
+                    guard let old = previous[fresh.id], old.type == fresh.type, old.target == fresh.target else { return fresh }
+                    var kept = fresh
+                    kept.progress = old.progress
+                    return kept
+                }
                 saveMissions()
             }
         } else {
@@ -44,6 +54,11 @@ class MissionManager: ObservableObject {
 
     /// Updates mission progress based on current state.
     func updateProgress(todaySteps: Int, currentStreak: Int, currentHour: Int) {
+        // App stayed in memory past midnight (or the week rolled over): start fresh missions first,
+        // instead of applying today's steps to yesterday's list.
+        if let first = missions.first, first.dateString != todayString {
+            loadOrGenerateMissions(weeklyAverage: lastWeeklyAverage)
+        }
         var changed = false
 
         for i in missions.indices {

@@ -39,22 +39,31 @@ struct DailyHistory: Codable, Equatable {
         lastUpdated = Date()
     }
     
-    /// Re-derives day keys from stored dates. Older builds keyed days with the user's
-    /// calendar/locale; returns true when anything changed so the caller can persist it.
+    /// Repairs day keys written by older builds that keyed days with the user's calendar or
+    /// numbering system. Valid "yyyy-MM-dd" keys are the source of truth and are never touched,
+    /// so time-zone travel can't shift history. Returns true when anything changed.
     mutating func normalizeDayKeys() -> Bool {
+        guard days.contains(where: { !Self.isValidDayKey($0.dateString) }) else { return false }
         var byKey: [String: DailyGoalState] = [:]
         for day in days {
-            let key = DailyGoalState.dayKey(for: day.date)
+            let key = Self.isValidDayKey(day.dateString) ? day.dateString : DailyGoalState.dayKey(for: day.date)
             let normalized = DailyGoalState(
                 dateString: key, date: day.date, steps: day.steps, goal: day.goal, isGoalMet: day.isGoalMet
             )
             if let existing = byKey[key], existing.steps >= normalized.steps { continue }
             byKey[key] = normalized
         }
-        let normalized = byKey.values.sorted { $0.date < $1.date }
-        guard normalized != days else { return false }
-        days = normalized
+        days = byKey.values.sorted { $0.dateString < $1.dateString }
         return true
+    }
+
+    /// ASCII "yyyy-MM-dd" with a plausible Gregorian year.
+    static func isValidDayKey(_ key: String) -> Bool {
+        let parts = key.split(separator: "-")
+        guard key.count == 10, parts.count == 3,
+              key.allSatisfy({ $0 == "-" || ("0"..."9").contains($0) }),
+              let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]) else { return false }
+        return (2000...2200).contains(year) && (1...12).contains(month) && (1...31).contains(day)
     }
 
     /// Day key → state, for loops that look up many days (streaks span up to `maxDays`).

@@ -28,6 +28,9 @@ class StoreManager: ObservableObject {
     /// Error message if something went wrong.
     @Published var errorMessage: String?
 
+    /// The last purchase is waiting for approval (Ask to Buy / SCA). Access arrives via Transaction.updates.
+    @Published var purchaseIsPending = false
+
     /// Transaction listener task.
     private var updateListenerTask: Task<Void, Error>?
 
@@ -100,6 +103,7 @@ class StoreManager: ObservableObject {
     /// - Returns: Whether the purchase was successful.
     @discardableResult
     func purchase(_ product: Product) async -> Bool {
+        purchaseIsPending = false
         do {
             let result = try await product.purchase()
 
@@ -114,7 +118,8 @@ class StoreManager: ObservableObject {
                 return false
 
             case .pending:
-                // Transaction requires approval (e.g., Ask to Buy)
+                // Requires approval (e.g. Ask to Buy); the paywall tells the user it's waiting.
+                purchaseIsPending = true
                 return false
 
             @unknown default:

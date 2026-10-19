@@ -10,6 +10,9 @@ struct StreakHeroView: View {
     var isPremium: Bool = false
     var onUpgradeTap: (() -> Void)?
 
+    /// Observed so best streak and coin balance update live.
+    @ObservedObject private var persistence = PersistenceManager.shared
+
     private var progress: Double {
         min(Double(todaySteps) / Double(dailyGoal), 1.0)
     }
@@ -26,7 +29,7 @@ struct StreakHeroView: View {
     }
 
     private var bestStreak: Int {
-        PersistenceManager.shared.progressState.longestStreak
+        persistence.progressState.longestStreak
     }
 
     var body: some View {
@@ -223,7 +226,7 @@ struct StreakHeroView: View {
                     }
                     .accessibilityHidden(true)
 
-                    let balance = PersistenceManager.shared.progressState.stepCoinBalance
+                    let balance = persistence.progressState.stepCoinBalance
                     HStack(spacing: Space.xs) {
                         Image(systemName: "circle.fill")
                             .font(.caption2)

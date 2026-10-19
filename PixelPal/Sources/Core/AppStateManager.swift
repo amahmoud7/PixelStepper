@@ -54,6 +54,18 @@ class AppStateManager: ObservableObject {
         missionManager.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }.store(in: &cancellables)
+
+        // Buying (or losing) premium changes mission count, the weekly challenge and the phase cap.
+        storeManager.$isPremium
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.isOnboardingComplete else { return }
+                self.missionManager.loadOrGenerateMissions(weeklyAverage: self.weeklySteps / 7)
+                self.checkPhaseGraduation()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Computed
@@ -231,6 +243,7 @@ class AppStateManager: ObservableObject {
     }
 
     private func updateStreakPersistence() {
+        HistoryManager.shared.applyStreakFreezeIfNeeded()
         let streak = HistoryManager.shared.currentStreak
         currentStreak = streak
         let progress = PersistenceManager.shared.progressState

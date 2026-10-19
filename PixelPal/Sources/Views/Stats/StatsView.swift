@@ -1,6 +1,7 @@
 import SwiftUI
+import Charts
 
-/// Stats tab: Week memory + personal records + phase progress + 30-day calendar heatmap.
+/// Stats tab: this week's chart → phase progress → 30-day calendar → personal records.
 struct StatsView: View {
     @EnvironmentObject var appState: AppStateManager
     @ObservedObject private var historyManager = HistoryManager.shared
@@ -14,23 +15,20 @@ struct StatsView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: Space.screen) {
                 if hasHistory {
-                    // Week memory
-                    WeekMemorySection()
+                    // This week (bar chart replaces the old 7-dot memory row)
+                    ThisWeekCard(days: historyManager.last7Days())
                         .padding(.horizontal, Space.screen)
                 } else {
                     StatsEmptyState()
                         .padding(.horizontal, Space.screen)
                 }
 
-                // Personal records
-                PersonalRecordsView()
-                    .padding(.horizontal, Space.screen)
-
                 // Phase progress
                 PhaseProgressCard(
                     weeklySteps: appState.weeklySteps,
                     currentPhase: appState.currentPhase,
-                    isPremium: appState.storeManager.isPremium
+                    isPremium: appState.storeManager.isPremium,
+                    onUnlock: { appState.showPaywall = true }
                 )
                 .padding(.horizontal, Space.screen)
 
@@ -40,10 +38,80 @@ struct StatsView: View {
                         .padding(.horizontal, Space.screen)
                 }
 
+                // Personal records
+                PersonalRecordsView()
+                    .padding(.horizontal, Space.screen)
+
                 Spacer().frame(height: Space.xl)
             }
             .padding(.top, Space.s)
         }
+    }
+}
+
+// MARK: - This Week
+
+private struct ThisWeekCard: View {
+    let days: [DailyHistory.DayViewData]
+
+    private let goal = 7500
+
+    private var daysAtGoal: Int { days.filter(\.isGoalMet).count }
+    private var totalSteps: Int { days.reduce(0) { $0 + $1.steps } }
+
+    /// Keeps the goal line visible on low-step weeks.
+    private var yMax: Int { max(days.map(\.steps).max() ?? 0, goal) * 11 / 10 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text("This week")
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text("\(daysAtGoal) of 7 days at goal · \(totalSteps.formatted()) steps")
+                    .font(.ppCaption)
+                    .foregroundColor(Theme.textSecondary)
+            }
+
+            Chart {
+                ForEach(days) { day in
+                    BarMark(
+                        x: .value("Day", day.date, unit: .day),
+                        y: .value("Steps", day.steps)
+                    )
+                    .foregroundStyle(barColor(for: day))
+                    .cornerRadius(2)
+                    .accessibilityLabel(Text(day.isToday ? "Today" : day.date.formatted(.dateTime.weekday(.wide))))
+                    .accessibilityValue(Text("\(day.steps.formatted()) steps\(day.isGoalMet ? ", goal met" : "")"))
+                }
+
+                RuleMark(y: .value("Goal", goal))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text("Goal")
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.textTertiary)
+                    }
+                    .accessibilityLabel(Text("Daily goal"))
+                    .accessibilityValue(Text("\(goal.formatted()) steps"))
+            }
+            .chartYScale(domain: 0...yMax)
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day)) { _ in
+                    AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+                }
+            }
+            .frame(height: 160)
+        }
+        .glassCard()
+    }
+
+    private func barColor(for day: DailyHistory.DayViewData) -> Color {
+        if day.isGoalMet { return Theme.goalMet }
+        if day.isToday { return Theme.today }
+        return Theme.belowGoal
     }
 }
 
@@ -76,6 +144,7 @@ private struct PhaseProgressCard: View {
     let weeklySteps: Int
     let currentPhase: Int
     let isPremium: Bool
+    let onUnlock: () -> Void
 
     private var nextThreshold: Int {
         PhaseCalculator.nextThreshold(for: currentPhase)
@@ -161,10 +230,21 @@ private struct PhaseProgressCard: View {
                 .accessibilityHidden(true)
 
                 if currentPhase >= 2 && !isPremium {
-                    Text("Unlock Premium for Phase \(currentPhase + 1)")
-                        .font(.ppMicro)
+                    Button {
+                        Haptics.tap()
+                        onUnlock()
+                    } label: {
+                        HStack(spacing: Space.xs) {
+                            Text("Unlock Premium for Phase \(currentPhase + 1)")
+                            Image(systemName: "chevron.right")
+                                .accessibilityHidden(true)
+                        }
+                        .font(.ppCaption.weight(.semibold))
                         .foregroundColor(Theme.purpleText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PPPressableStyle())
                 } else {
                     let remaining = max(0, nextThreshold - weeklySteps)
                     Text("\(remaining.formatted()) steps to \(nextPhaseName) · resets weekly")

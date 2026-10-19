@@ -43,9 +43,11 @@ class LiveActivityManager: ObservableObject {
 
     /// Checks if there's an existing Live Activity and restores reference to it.
     private func checkForExistingActivity() {
-        if let existing = Activity<PixelStepperAttributes>.activities.first {
+        // Ignore activities that already ended (e.g. swiped away or expired after 8h).
+        if let existing = Activity<PixelStepperAttributes>.activities.first(where: { $0.activityState == .active }) {
             self.currentActivity = existing
             self.isActive = true
+            observeEnd(of: existing)
         }
     }
 
@@ -91,6 +93,7 @@ class LiveActivityManager: ObservableObject {
             self.currentActivity = activity
             self.isActive = true
             self.lastSentState = nil
+            self.observeEnd(of: activity)
             print("Started Live Activity: \(activity.id)")
         } catch {
             print("Failed to start Live Activity: \(error)")
@@ -141,10 +144,31 @@ class LiveActivityManager: ObservableObject {
     }
 
     /// Returns the activity to idle when the app leaves the foreground (no more step updates arrive).
+    /// Also clears a milestone banner, since its timer can't fire while the app is suspended.
     func markIdle() {
-        guard isWalking, let activity = currentActivity else { return }
+        guard let activity = currentActivity, isWalking || currentMilestone != nil else { return }
         isWalking = false
+        currentMilestone = nil
+        milestoneTimer?.invalidate()
+        milestoneTimer = nil
         push(activity, steps: previousSteps)
+    }
+
+    /// Keeps `isActive` honest when the user dismisses the activity or the system ends it.
+    private var endObservation: Task<Void, Never>?
+
+    private func observeEnd(of activity: Activity<PixelStepperAttributes>) {
+        endObservation?.cancel()
+        endObservation = Task { [weak self] in
+            for await state in activity.activityStateUpdates where state == .dismissed || state == .ended {
+                guard let self, self.currentActivity?.id == activity.id else { return }
+                self.currentActivity = nil
+                self.isActive = false
+                self.isWalking = false
+                self.lastSentState = nil
+                return
+            }
+        }
     }
 
     /// Last content sent, to skip identical updates (ActivityKit budgets updates).
@@ -219,25 +243,9 @@ class LiveActivityManager: ObservableObject {
         currentMilestone = nil
         milestoneTimer?.invalidate()
         milestoneTimer = nil
-
         guard let activity = currentActivity else { return }
-
-        let contentState = PixelStepperAttributes.ContentState(
-            steps: steps,
-            state: currentState,
-            gender: currentGender,
-            isWalking: isWalking,
-            walkingFrame: 1,
-            currentPhase: currentPhase,
-            milestoneText: nil,
-            showStepCount: isWalking
-        )
-
-        Task {
-            await activity.update(
-                ActivityContent(state: contentState, staleDate: nil)
-            )
-        }
+        // Latest known steps, deduped like every other update.
+        push(activity, steps: max(steps, previousSteps))
     }
 
     /// Ends the current Live Activity.

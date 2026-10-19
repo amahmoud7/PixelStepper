@@ -5,6 +5,8 @@ struct CelebrationOverlay: View {
     let event: CelebrationEvent
     /// Coins actually awarded for this event; the pill is hidden when nil or 0.
     var coins: Int? = nil
+    /// Used to draw the evolved character for `.phaseEvolution`.
+    var gender: Gender = .male
     let onDismiss: () -> Void
     let onShare: () -> Void
 
@@ -89,28 +91,7 @@ struct CelebrationOverlay: View {
                 Spacer()
                     .frame(height: 80)
 
-                // "Milestone Unlocked" badge
-                Text("MILESTONE UNLOCKED")
-                    .font(.ppOverline)
-                    .tracking(1)
-                    .foregroundColor(Theme.gold)
-                    .padding(.horizontal, Space.l)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
-                            .fill(Theme.gold.opacity(0.12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
-                                    .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                    .opacity(isShowing ? 1 : 0)
-                    .offset(y: isShowing || reduceMotion ? 0 : 10)
-
-                Spacer()
-                    .frame(height: Space.xl)
-
-                // Achievement icon
+                // Achievement icon (or the evolved character)
                 achievementIcon
                     .scaleEffect(iconIn || reduceMotion ? 1.0 : 0.5)
                     .opacity(iconIn ? 1.0 : 0)
@@ -195,14 +176,13 @@ struct CelebrationOverlay: View {
                     Haptics.soft()
                     dismiss()
                 } label: {
-                    Text("Tap to dismiss")
-                        .font(.ppCaption)
-                        .foregroundColor(Theme.textTertiary)
+                    Text("Done")
+                        .font(.ppRowTitle)
+                        .foregroundColor(Theme.textSecondary)
                         .padding(.horizontal, Space.l)
                         .minTapTarget()
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Dismiss")
                 .padding(.top, Space.s)
                 .padding(.bottom, 36)
             }
@@ -271,6 +251,16 @@ struct CelebrationOverlay: View {
 
     @ViewBuilder
     private var achievementIcon: some View {
+        if case .phaseEvolution(let phase) = event {
+            // Show the evolved character itself, with its phase aura.
+            AvatarView(state: .vital, gender: gender, phase: phase, size: 140)
+        } else {
+            symbolBadge
+        }
+    }
+
+    @ViewBuilder
+    private var symbolBadge: some View {
         let iconConfig: (name: String, color: Color) = {
             switch event {
             case .streakMilestone: return ("flame.fill", Theme.amber)

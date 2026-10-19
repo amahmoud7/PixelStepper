@@ -55,7 +55,7 @@ struct MainTabView: View {
         ZStack {
             // Celebration overlay (highest priority)
             if let event = appState.showCelebration {
-                CelebrationOverlay(event: event, coins: appState.coinsAwarded(for: event)) {
+                CelebrationOverlay(event: event, coins: appState.coinsAwarded(for: event), gender: appState.gender) {
                     appState.celebrationDismissed()
                 } onShare: {
                     appState.paywallAfterCelebration = false

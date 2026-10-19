@@ -87,7 +87,7 @@
           },
           "localizations" : [
             {
-              "description" : "Unlock all phases, 2x coins & premium share cards",
+              "description" : "All 4 phases, 5 daily missions & streak freeze",
               "displayName" : "Monthly Premium",
               "locale" : "en_US"
             }

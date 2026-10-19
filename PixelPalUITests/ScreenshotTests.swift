@@ -17,6 +17,7 @@ final class ScreenshotTests: XCTestCase {
             guard let next = primaryButton(in: app) else { break }
             next.tap()
             pause()
+            dismissSystemAlerts()
             snap(String(format: "%02d-onboarding-%d", page, page))
         }
     }
@@ -63,7 +64,20 @@ final class ScreenshotTests: XCTestCase {
         app.launchArguments = arguments
         app.launch()
         pause(2)
+        dismissSystemAlerts()
         return app
+    }
+
+    /// Permission alerts (notifications, Health) belong to SpringBoard and would cover the screenshots.
+    private func dismissSystemAlerts() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for label in ["Don’t Allow", "Don't Allow", "Not Now", "OK"] {
+            let button = springboard.buttons[label]
+            if button.waitForExistence(timeout: 1) {
+                button.tap()
+                pause(0.5)
+            }
+        }
     }
 
     /// The bottom-most enabled button (onboarding CTAs sit at the bottom of each page).

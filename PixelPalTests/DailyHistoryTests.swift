@@ -40,6 +40,30 @@ final class DailyHistoryTests: XCTestCase {
         XCTAssertEqual(DailyGoalState.create(for: date).dateString, "2026-03-07")
     }
 
+    func test_normalizeDayKeys_validKeys_untouchedRegardlessOfTimeZone() {
+        // A day recorded late in the evening in another time zone keeps its stored key.
+        let lateEvening = Date(timeIntervalSince1970: 1_760_000_000) // fixed instant
+        var history = DailyHistory.createNew()
+        history.days = [DailyGoalState(dateString: "2025-10-09", date: lateEvening, steps: 9000, goal: 7500, isGoalMet: true)]
+        XCTAssertFalse(history.normalizeDayKeys())
+        XCTAssertEqual(history.days.first?.dateString, "2025-10-09")
+    }
+
+    func test_normalizeDayKeys_repairsNonGregorianKeys() {
+        let date = Date(timeIntervalSince1970: 1_760_000_000)
+        var history = DailyHistory.createNew()
+        history.days = [DailyGoalState(dateString: "2568-10-09", date: date, steps: 9000, goal: 7500, isGoalMet: true)]
+        XCTAssertTrue(history.normalizeDayKeys())
+        XCTAssertEqual(history.days.first?.dateString, DailyGoalState.dayKey(for: date))
+    }
+
+    func test_isValidDayKey() {
+        XCTAssertTrue(DailyHistory.isValidDayKey("2026-10-19"))
+        XCTAssertFalse(DailyHistory.isValidDayKey("2569-10-19"))
+        XCTAssertFalse(DailyHistory.isValidDayKey("٢٠٢٦-١٠-١٩"))
+        XCTAssertFalse(DailyHistory.isValidDayKey("2026-13-01"))
+    }
+
     func test_seededGenerator_sameString_sameSequence() {
         var a = SeededRandomNumberGenerator(string: "2026-10-15")
         var b = SeededRandomNumberGenerator(string: "2026-10-15")

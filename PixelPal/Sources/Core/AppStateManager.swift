@@ -103,6 +103,7 @@ class AppStateManager: ObservableObject {
 
         // Load missions for today
         missionManager.loadOrGenerateMissions(weeklyAverage: weeklySteps / 7)
+        syncWatch()
     }
 
     func fetchCumulativeSteps(healthManager: HealthKitManager) {
@@ -182,6 +183,8 @@ class AppStateManager: ObservableObject {
                 cumulativeSteps: cumulativeSteps
             )
         }
+
+        syncWatch()
 
         // Schedule streak-at-risk notification with real data
         let stepsRemaining = max(0, 7500 - todaySteps)
@@ -428,6 +431,22 @@ class AppStateManager: ObservableObject {
     }
 
     private var coinToastTask: Task<Void, Never>?
+
+    // MARK: - Apple Watch
+
+    /// Shares the character, phase and streak with the watch app (steps come from HealthKit there).
+    private func syncWatch() {
+        guard isOnboardingComplete else { return }
+        let progress = PersistenceManager.shared.progressState
+        WatchSyncManager.shared.send(WatchSnapshot(
+            gender: gender,
+            phase: currentPhase,
+            currentStreak: currentStreak,
+            longestStreak: max(progress.longestStreak, currentStreak),
+            dailyGoal: 7500,
+            updatedAt: Date()
+        ))
+    }
 
     // MARK: - Paywall
 

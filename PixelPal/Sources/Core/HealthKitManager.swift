@@ -10,6 +10,12 @@ class HealthKitManager: ObservableObject {
     /// Per-day step counts for the last 7 days, keyed by start-of-day Date.
     @Published var dailyStepsLast7Days: [Date: Int] = [:]
 
+    /// Steps between midnight and noon today (for the morning mission). Nil until known.
+    @Published var stepsBeforeNoon: Int?
+
+    /// Steps since 17:00 today (for the evening mission). Nil before 17:00 or until known.
+    @Published var stepsSinceFivePM: Int?
+
     /// Cumulative steps (all history up to now).
     @Published var cumulativeSteps: Int = 0
 
@@ -66,6 +72,45 @@ class HealthKitManager: ObservableObject {
         lastFetch = Date()
         fetchTodaySteps()
         fetchDailyStepsLast7Days()
+        fetchMissionWindows()
+    }
+
+    /// Morning (00:00–12:00) and evening (17:00–now) totals, so missions count real windows.
+    private func fetchMissionWindows() {
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfDay = calendar.startOfDay(for: now)
+        guard let noon = calendar.date(bySettingHour: 12, minute: 0, second: 0, of: now),
+              let fivePM = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: now) else { return }
+
+        querySum(from: startOfDay, to: min(now, noon)) { [weak self] steps in
+            guard let self, self.stepsBeforeNoon != steps else { return }
+            self.stepsBeforeNoon = steps
+        }
+        if now >= fivePM {
+            querySum(from: fivePM, to: now) { [weak self] steps in
+                guard let self, self.stepsSinceFivePM != steps else { return }
+                self.stepsSinceFivePM = steps
+            }
+        } else if stepsSinceFivePM != nil {
+            stepsSinceFivePM = nil
+        }
+    }
+
+    /// Step total in [start, end); completion runs on the main queue with nil on failure.
+    private func querySum(from start: Date, to end: Date, completion: @escaping (Int?) -> Void) {
+        guard start < end else {
+            completion(0)
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, error in
+            let steps: Int? = HealthKitManager.isUsable(error)
+                ? Int(result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0)
+                : nil
+            DispatchQueue.main.async { completion(steps) }
+        }
+        healthStore.execute(query)
     }
 
     private func fetchTodaySteps() {

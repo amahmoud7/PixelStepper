@@ -12,16 +12,9 @@ struct DailyMissionsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Header: Daily Missions + coin balance
-            HStack {
-                Text("Daily Missions")
-                    .font(.ppSection)
-                    .foregroundColor(Theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-
-                Spacer()
-
+        VStack(alignment: .leading, spacing: Space.m) {
+            // Header: Daily missions + coin balance
+            SectionHeader("Daily missions") {
                 HStack(spacing: Space.xs) {
                     CoinIcon()
                     Text("\(coinBalance)")
@@ -98,6 +91,38 @@ struct DailyMissionsView: View {
         }
         .buttonStyle(PPPressableStyle())
         .accessibilityHint("Opens Premium")
+    }
+}
+
+// MARK: - Section Header
+
+/// Home section title: sentence case, sits outside cards, optional trailing accessory.
+private struct SectionHeader<Accessory: View>: View {
+    let title: String
+    let accessory: Accessory
+
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Space.s) {
+            Text(title)
+                .font(.ppSection)
+                .foregroundColor(Theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+
+            Spacer(minLength: Space.s)
+
+            accessory
+        }
+    }
+}
+
+extension SectionHeader where Accessory == EmptyView {
+    init(_ title: String) {
+        self.init(title) { EmptyView() }
     }
 }
 

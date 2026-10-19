@@ -53,41 +53,28 @@ class MissionManager: ObservableObject {
     }
 
     /// Updates mission progress based on current state.
-    func updateProgress(todaySteps: Int, currentStreak: Int, currentHour: Int) {
+    func updateProgress(todaySteps: Int, currentStreak: Int, currentHour: Int,
+                        stepsBeforeNoon: Int? = nil, stepsSinceFivePM: Int? = nil) {
         // App stayed in memory past midnight (or the week rolled over): start fresh missions first,
         // instead of applying today's steps to yesterday's list.
         if let first = missions.first, first.dateString != todayString {
             loadOrGenerateMissions(weeklyAverage: lastWeeklyAverage)
         }
+        let input = MissionProgress.Input(
+            todaySteps: todaySteps,
+            stepsBeforeNoon: stepsBeforeNoon,
+            stepsSinceFivePM: stepsSinceFivePM,
+            currentHour: currentHour,
+            dailyGoal: dailyGoal
+        )
         var changed = false
-
-        for i in missions.indices {
-            guard !missions[i].isCompleted else { continue }
-
-            let newProgress: Int
-            switch missions[i].type {
-            case .stepTarget, .goalCrush:
-                newProgress = todaySteps
-            case .morningWalk:
-                newProgress = currentHour < 12 ? todaySteps : missions[i].progress
-            case .eveningPush:
-                // Track steps after 5pm (simplified: use total steps if after 5pm)
-                newProgress = currentHour >= 17 ? min(todaySteps, missions[i].target) : missions[i].progress
-            case .streakExtend:
-                newProgress = todaySteps >= dailyGoal ? 1 : 0
-            case .consistentDay:
-                // Simplified: count as progress if steps > 500 per active hour
-                let activeHours = max(1, currentHour - 7)
-                let avgPerHour = todaySteps / activeHours
-                newProgress = avgPerHour >= 500 ? min(activeHours, missions[i].target) : missions[i].progress
-            }
-
+        for i in missions.indices where !missions[i].isCompleted {
+            let newProgress = MissionProgress.evaluate(missions[i], input)
             if newProgress != missions[i].progress {
                 missions[i].progress = newProgress
                 changed = true
             }
         }
-
         if changed {
             saveMissions()
         }

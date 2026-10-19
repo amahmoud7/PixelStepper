@@ -16,7 +16,8 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
+            // 24pt between sections; 12pt within a section.
+            VStack(spacing: Space.xl) {
                 // Top bar
                 topBar
                     .padding(.top, Space.s)
@@ -198,7 +199,7 @@ struct HomeView: View {
 
     /// Sized so ring + count + caption fit above the tab bar on iPhone SE.
     private var hero: some View {
-        VStack(spacing: Space.s) {
+        VStack(spacing: Space.m) {
             ZStack {
                 Circle()
                     .stroke(Theme.surfaceStrong, lineWidth: 8)

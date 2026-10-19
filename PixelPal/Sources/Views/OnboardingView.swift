@@ -1,33 +1,28 @@
 import SwiftUI
 
-/// 4-screen onboarding: Hook → Character → Evolution → Permission.
+/// 3-screen onboarding: Hook → Character → Permissions.
 /// Rich gradients, large characters, staggered animations, branded CTAs.
+/// The primary CTA is always the bottom-most button on each page (the UI test relies on it).
 struct OnboardingView: View {
     @EnvironmentObject var healthManager: HealthKitManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentStep: Int = 1
     @State private var selectedGender: Gender? = nil
     @State private var selectedStyle: String = "default"
+    /// Direction of the last page change, so Back slides the opposite way.
+    @State private var isGoingBack = false
+
+    private let totalSteps = 3
 
     private var backgroundGradient: LinearGradient {
         let colors: [Color] = {
             switch currentStep {
-            case 1: return [
-                Color(red: 0.05, green: 0.02, blue: 0.15),
-                Color(red: 0.12, green: 0.04, blue: 0.24),
-                Color(red: 0.06, green: 0.02, blue: 0.16)
-            ]
             case 2: return [
                 Color(red: 0.08, green: 0.03, blue: 0.18),
                 Color(red: 0.16, green: 0.05, blue: 0.28),
                 Color(red: 0.08, green: 0.03, blue: 0.18)
             ]
             case 3: return [
-                Color(red: 0.10, green: 0.03, blue: 0.20),
-                Color(red: 0.18, green: 0.06, blue: 0.30),
-                Color(red: 0.06, green: 0.04, blue: 0.16)
-            ]
-            case 4: return [
                 Color(red: 0.06, green: 0.04, blue: 0.16),
                 Color(red: 0.12, green: 0.06, blue: 0.22),
                 Color(red: 0.04, green: 0.06, blue: 0.14)
@@ -48,12 +43,11 @@ struct OnboardingView: View {
     }
 
     private var pageTransition: AnyTransition {
-        reduceMotion
-            ? .opacity
-            : .asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            )
+        if reduceMotion { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: isGoingBack ? .leading : .trailing).combined(with: .opacity),
+            removal: .move(edge: isGoingBack ? .trailing : .leading).combined(with: .opacity)
+        )
     }
 
     var body: some View {
@@ -63,10 +57,28 @@ struct OnboardingView: View {
                 .motion(Motion.smooth, value: currentStep)
 
             VStack(spacing: 0) {
-                // Progress bar
-                OnboardingProgress(currentStep: currentStep, totalSteps: 4)
-                    .padding(.top, Space.l)
-                    .padding(.horizontal, 48)
+                // Back + page indicator
+                HStack(spacing: Space.s) {
+                    if currentStep > 1 {
+                        Button(action: previousStep) {
+                            Image(systemName: "chevron.left")
+                                .font(.ppSection)
+                                .foregroundColor(Theme.textSecondary)
+                                .minTapTarget()
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Back")
+                    } else {
+                        Color.clear.frame(width: 44, height: 44)
+                    }
+
+                    OnboardingProgress(currentStep: currentStep, totalSteps: totalSteps)
+
+                    // Balances the Back button so the indicator stays centered.
+                    Color.clear.frame(width: 44, height: 44)
+                }
+                .padding(.top, Space.s)
+                .padding(.horizontal, Space.s)
 
                 Group {
                     switch currentStep {
@@ -78,15 +90,9 @@ struct OnboardingView: View {
                             onContinue: { nextStep() }
                         )
                     case 3:
-                        EvolutionScreen(
-                            selectedGender: selectedGender ?? .male,
-                            onContinue: { nextStep() }
-                        )
-                    case 4:
                         PermissionScreen(
                             selectedGender: selectedGender,
-                            selectedStyle: selectedStyle,
-                            healthManager: healthManager
+                            selectedStyle: selectedStyle
                         )
                     default:
                         EmptyView()
@@ -101,8 +107,24 @@ struct OnboardingView: View {
     }
 
     private func nextStep() {
-        withMotion(Motion.smooth, reduceMotion: reduceMotion) {
-            currentStep += 1
+        guard currentStep < totalSteps else { return }
+        isGoingBack = false
+        // Next runloop, so the outgoing page renders with the new direction before it's removed.
+        DispatchQueue.main.async {
+            withMotion(Motion.smooth, reduceMotion: reduceMotion) {
+                currentStep += 1
+            }
+        }
+    }
+
+    private func previousStep() {
+        guard currentStep > 1 else { return }
+        Haptics.soft()
+        isGoingBack = true
+        DispatchQueue.main.async {
+            withMotion(Motion.smooth, reduceMotion: reduceMotion) {
+                currentStep -= 1
+            }
         }
     }
 }
@@ -265,13 +287,16 @@ private struct HookScreen: View {
                 Spacer().frame(height: Space.m)
 
                 // Subtitle
-                Text("A living character that walks with you on your Lock Screen all day.")
-                    .font(.ppBody)
-                    .foregroundColor(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .entrance(subtitleAppeared, offset: 12)
+                VStack(spacing: Space.s) {
+                    Text("A living character that walks with you on your Lock Screen all day.")
+                    Text("Walk more, and your character's aura evolves through 4 phases.")
+                }
+                .font(.ppBody)
+                .foregroundColor(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .entrance(subtitleAppeared, offset: 12)
 
                 Spacer().frame(height: 28)
 
@@ -455,224 +480,21 @@ private struct CharacterCard: View {
     }
 }
 
-// MARK: - Screen 3: Evolution Preview
+// MARK: - Screen 3: Permissions
 
-private struct EvolutionScreen: View {
-    let selectedGender: Gender
-    let onContinue: () -> Void
-
-    @State private var selectedPhase: Double = 1
-    @State private var animFrame: Int = 1
-    @State private var appeared = false
-    @State private var characterAppeared = false
-    @State private var sliderAppeared = false
-    @State private var featuresAppeared = false
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var currentPhase: Int { Int(selectedPhase) }
-
-    private var phaseColor: Color { Theme.phaseColor(currentPhase) }
-
-    /// Phase color for small text; the brand purple is too dark at caption sizes.
-    private var phaseTextColor: Color {
-        currentPhase == 3 ? Theme.purpleText : phaseColor
-    }
-
-    /// Weekly target to reach this phase, from the same thresholds the app uses.
-    private var phaseSteps: String {
-        guard currentPhase > 1 else { return "0 steps" }
-        let threshold = PhaseCalculator.nextThreshold(for: currentPhase - 1)
-        return "\(threshold.formatted()) steps in a week"
-    }
-
-    private var avatarState: AvatarState {
-        switch currentPhase {
-        case 1: return .low
-        case 2: return .neutral
-        case 3, 4: return .vital
-        default: return .low
-        }
-    }
-
-    var body: some View {
-        OnboardingPage {
-            VStack(spacing: 0) {
-                Text("Watch them evolve")
-                    .font(.ppTitle)
-                    .foregroundColor(Theme.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
-                    .entrance(appeared, offset: 16)
-
-                Spacer().frame(height: 6)
-
-                Text("Every step powers their growth")
-                    .font(.ppBody)
-                    .foregroundColor(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .entrance(appeared)
-
-                Spacer().frame(height: Space.xl)
-
-                // Character with phase glow
-                ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [phaseColor.opacity(0.25), phaseColor.opacity(0.05), .clear],
-                                center: .center,
-                                startRadius: 10,
-                                endRadius: 100
-                            )
-                        )
-                        .frame(width: 200, height: 200)
-
-                    Circle()
-                        .stroke(phaseColor.opacity(0.3), lineWidth: 2)
-                        .frame(width: 160, height: 160)
-
-                    Image(decorative: SpriteAssets.spriteName(gender: selectedGender, state: avatarState, frame: animFrame))
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 120, height: 120)
-                }
-                .entrance(characterAppeared, scale: 0.5)
-                .motion(Motion.snappy, value: currentPhase)
-                .spriteFrameLoop($animFrame)
-
-                Spacer().frame(height: Space.m)
-
-                // Phase badge
-                HStack(spacing: Space.s) {
-                    Text("Phase \(currentPhase)")
-                        .font(.ppBody.weight(.bold))
-                        .foregroundColor(Theme.textPrimary)
-                    Text(Theme.phaseName(currentPhase))
-                        .font(.ppBody)
-                        .foregroundColor(phaseTextColor)
-                }
-                .padding(.horizontal, Space.l)
-                .padding(.vertical, Space.s)
-                .background(
-                    Capsule()
-                        .fill(phaseColor.opacity(0.15))
-                        .overlay(
-                            Capsule()
-                                .stroke(phaseColor.opacity(0.3), lineWidth: 1)
-                        )
-                )
-                .motion(Motion.snappy, value: currentPhase)
-                .accessibilityElement(children: .combine)
-
-                Spacer().frame(height: 6)
-
-                Text(phaseSteps)
-                    .font(.ppCaption)
-                    .foregroundColor(phaseTextColor)
-                    .motion(Motion.snappy, value: currentPhase)
-
-                Spacer().frame(height: Space.screen)
-
-                // Phase dots + slider
-                VStack(spacing: 10) {
-                    HStack(spacing: 0) {
-                        ForEach(1...4, id: \.self) { phase in
-                            Circle()
-                                .fill(phase <= currentPhase ? Theme.phaseColor(phase) : Color.white.opacity(0.15))
-                                .frame(width: 10, height: 10)
-                                .shadow(color: phase <= currentPhase ? Theme.phaseColor(phase).opacity(0.5) : .clear, radius: 4)
-                            if phase < 4 { Spacer() }
-                        }
-                    }
-                    .padding(.horizontal, 32)
-                    .accessibilityHidden(true)
-
-                    Slider(value: $selectedPhase, in: 1...4, step: 1)
-                        .tint(phaseColor)
-                        .padding(.horizontal, Space.xl)
-                        .accessibilityLabel("Preview phase")
-                        .accessibilityValue("Phase \(currentPhase), \(Theme.phaseName(currentPhase))")
-
-                    Text("Drag to preview")
-                        .font(.ppMicro)
-                        .foregroundColor(Theme.textTertiary)
-                        .accessibilityHidden(true)
-                }
-                .entrance(sliderAppeared, offset: 16)
-                .onChange(of: currentPhase) { _ in
-                    Haptics.select()
-                }
-
-                Spacer().frame(height: Space.screen)
-
-                // Feature highlights (merged from old differentiation screen)
-                VStack(spacing: Space.m) {
-                    FeaturePill(icon: "arrow.up.circle.fill", text: "Evolves as you walk", color: Theme.mint)
-                    FeaturePill(icon: "iphone.badge.play", text: "Lives on your Lock Screen", color: Theme.cyan)
-                    FeaturePill(icon: "flame.fill", text: "Streaks, missions & rewards", color: Theme.amber)
-                }
-                .entrance(featuresAppeared, offset: 12)
-            }
-        } footer: {
-            OnboardingCTA(title: "Continue") { onContinue() }
-        }
-        .onAppear {
-            withMotion(Motion.smooth, reduceMotion: reduceMotion) { appeared = true }
-            withMotion(Motion.staggered(2, Motion.bouncy), reduceMotion: reduceMotion) { characterAppeared = true }
-            withMotion(Motion.staggered(5), reduceMotion: reduceMotion) { sliderAppeared = true }
-            withMotion(Motion.staggered(7), reduceMotion: reduceMotion) { featuresAppeared = true }
-        }
-    }
-}
-
-private struct FeaturePill: View {
-    let icon: String
-    let text: String
-    let color: Color
-
-    @ScaledMetric(relativeTo: .subheadline) private var iconWidth: CGFloat = 24
-
-    var body: some View {
-        HStack(spacing: Space.m) {
-            Image(systemName: icon)
-                .font(.ppBody.weight(.semibold))
-                .foregroundColor(color)
-                .frame(width: iconWidth)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.ppBody)
-                .foregroundColor(Theme.textPrimary.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer()
-        }
-        .padding(.horizontal, Space.screen)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
-                .fill(color.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
-                        .stroke(color.opacity(0.15), lineWidth: 1)
-                )
-        )
-        .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: - Screen 4: Permission
-
+/// Primes both permissions before any system prompt appears:
+/// notifications are requested on Continue, then the profile is saved and
+/// ContentView asks for Health access once the main app appears.
 private struct PermissionScreen: View {
     let selectedGender: Gender?
     let selectedStyle: String
-    let healthManager: HealthKitManager
 
     @State private var appeared = false
     @State private var avatarAppeared = false
     @State private var badgesAppeared = false
     @State private var buttonAppeared = false
     @State private var glowPulse = false
+    @State private var isFinishing = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -714,23 +536,20 @@ private struct PermissionScreen: View {
                     .accessibilityAddTraits(.isHeader)
                     .entrance(appeared, offset: 16)
 
-                Spacer().frame(height: 10)
-
-                Text("We only read your step count to bring your character to life.")
-                    .font(.ppBody)
-                    .foregroundColor(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .entrance(appeared, offset: 12)
-
                 Spacer().frame(height: 28)
 
-                // Trust badges
+                // Permission primers
                 VStack(spacing: 10) {
-                    TrustBadge(icon: "lock.shield.fill", text: "100% on-device — nothing leaves your phone", color: Theme.mint)
-                    TrustBadge(icon: "eye.slash.fill", text: "No accounts, no tracking, no ads", color: Theme.cyan)
-                    TrustBadge(icon: "heart.fill", text: "Just steps — that's all we need", color: Theme.purpleText)
+                    TrustBadge(
+                        icon: "heart.fill",
+                        text: "Pixel Stepper reads your step count from Apple Health. Nothing leaves your phone.",
+                        color: Theme.mint
+                    )
+                    TrustBadge(
+                        icon: "bell.fill",
+                        text: "One gentle reminder a day, at most.",
+                        color: Theme.purpleText
+                    )
                 }
                 .entrance(badgesAppeared, offset: 16)
             }
@@ -738,6 +557,7 @@ private struct PermissionScreen: View {
             OnboardingCTA(title: "Continue") {
                 completeOnboarding()
             }
+            .disabled(isFinishing)
             .entrance(buttonAppeared, offset: 20)
         }
         .onAppear {
@@ -749,23 +569,22 @@ private struct PermissionScreen: View {
     }
 
     private func completeOnboarding() {
-        guard let gender = selectedGender else { return }
+        guard let gender = selectedGender, !isFinishing else { return }
+        isFinishing = true
 
-        let profile = UserProfile.createNew(gender: gender, starterStyle: selectedStyle)
         Task { @MainActor in
-            PersistenceManager.shared.saveUserProfile(profile)
-        }
-
-        SharedData.saveGender(gender)
-        healthManager.requestAuthorization { _ in }
-
-        Task {
-            let granted = await NotificationManager.shared.requestPermission()
-            if granted {
-                await MainActor.run {
+            // The only notification request in the app; asked before the profile save so the
+            // Health sheet (shown by ContentView after the save) never stacks on top of it.
+            if !LaunchFlags.uiTest {
+                let granted = await NotificationManager.shared.requestPermission()
+                if granted {
                     NotificationManager.shared.scheduleAll()
                 }
             }
+
+            let profile = UserProfile.createNew(gender: gender, starterStyle: selectedStyle)
+            SharedData.saveGender(gender)
+            PersistenceManager.shared.saveUserProfile(profile)
         }
     }
 }
@@ -785,13 +604,13 @@ private struct TrustBadge: View {
                 .frame(width: iconWidth)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.ppRowTitle.weight(.medium))
+                .font(.ppBody)
                 .foregroundColor(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 11)
+        .padding(.vertical, Space.m)
         .background(
             RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
                 .fill(Color.white.opacity(0.04))

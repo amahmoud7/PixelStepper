@@ -159,7 +159,9 @@ class AppStateManager: ObservableObject {
         missionManager.updateProgress(
             todaySteps: todaySteps,
             currentStreak: currentStreak,
-            currentHour: Calendar.current.component(.hour, from: Date())
+            currentHour: Calendar.current.component(.hour, from: Date()),
+            stepsBeforeNoon: healthManager.stepsBeforeNoon,
+            stepsSinceFivePM: healthManager.stepsSinceFivePM
         )
         // Award coins for newly completed missions
         for mission in missionManager.missions where mission.isCompleted && !previouslyCompleted.contains(mission.id) {

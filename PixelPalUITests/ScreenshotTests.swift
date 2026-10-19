@@ -13,7 +13,9 @@ final class ScreenshotTests: XCTestCase {
         snap("01-onboarding-1")
 
         // Walk forward through onboarding pages, capturing each one.
+        // 3 pages; the character page needs a pick before its CTA appears, so allow a few taps.
         for page in 2...6 {
+            if app.tabBars.firstMatch.exists { break }   // onboarding finished
             guard let next = primaryButton(in: app) else { break }
             next.tap()
             pause()

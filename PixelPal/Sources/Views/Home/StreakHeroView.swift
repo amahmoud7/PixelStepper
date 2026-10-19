@@ -67,8 +67,10 @@ struct StreakHeroView: View {
 private struct WeekDaySquare: View {
     let day: DailyHistory.DayViewData
 
+    /// Today stays neutral until the goal is met; only finished days can read as below goal.
     private var fill: Color {
         if day.isGoalMet { return Theme.goalMet }
+        if day.isToday { return Theme.noData }
         if day.hasData { return Theme.belowGoal }
         return Theme.noData
     }

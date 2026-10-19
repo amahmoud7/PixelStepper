@@ -10,6 +10,10 @@ struct ShareSheetView: View {
     @State private var showPaywall: Bool = false
     @State private var toastTask: Task<Void, Never>?
 
+    /// Still image of the current card config, rendered when the config changes so ShareLink always has an item.
+    @State private var renderedImage: UIImage?
+    @State private var renderFailed = false
+
     // Held in @State so they survive view rebuilds instead of being re-created each time.
     @State private var renderer = ShareCardRenderer()
     @State private var destinationManager = ShareDestinationManager()
@@ -22,225 +26,180 @@ struct ShareSheetView: View {
 
     private var isPremium: Bool { data.isPremium || store.isPremium }
 
+    private var renderConfig: RenderConfig {
+        RenderConfig(cardType: cardType, format: format, background: background)
+    }
+
     var body: some View {
-        ZStack {
-            Color(red: 0.04, green: 0.04, blue: 0.12)
-                .ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                Color(red: 0.04, green: 0.04, blue: 0.12)
+                    .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Header
-                Text("Share your progress")
-                    .font(.ppStat)
-                    .foregroundColor(Theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                    .padding(.top, Space.l)
-                    .padding(.bottom, Space.m)
-
-                // Card type tabs
-                HStack(spacing: Space.s) {
-                    ForEach(ShareCardType.allCases, id: \.self) { type in
-                        pill(title: type.title, horizontalPadding: 14, isSelected: cardType == type) {
-                            cardType = type
+                VStack(spacing: Space.m) {
+                    // Card type and format
+                    Picker("Card", selection: $cardType) {
+                        ForEach(ShareCardType.allCases, id: \.self) { type in
+                            Text(type.title).tag(type)
                         }
                     }
-                }
+                    .pickerStyle(.segmented)
 
-                // Format toggle
-                HStack(spacing: Space.s) {
-                    ForEach(ShareCardFormat.allCases, id: \.self) { fmt in
-                        pill(title: fmt.title, horizontalPadding: 18, isSelected: format == fmt) {
-                            format = fmt
+                    Picker("Format", selection: $format) {
+                        ForEach(ShareCardFormat.allCases, id: \.self) { fmt in
+                            Text(fmt.title).tag(fmt)
                         }
                     }
-                }
-                .padding(.bottom, Space.xs)
+                    .pickerStyle(.segmented)
 
-                // Background label
-                Text("Background")
-                    .font(.ppCaption.weight(.semibold))
-                    .foregroundColor(Theme.textTertiary)
-                    .accessibilityAddTraits(.isHeader)
-                    .padding(.bottom, 6)
+                    // Background picker
+                    VStack(spacing: 6) {
+                        Text("Background")
+                            .font(.ppCaption.weight(.semibold))
+                            .foregroundColor(Theme.textTertiary)
+                            .accessibilityAddTraits(.isHeader)
 
-                // Background picker
-                HStack(spacing: Space.m) {
-                    ForEach(ShareCardBackground.allCases, id: \.self) { bg in
-                        let isLocked = bg.requiresPremium && !isPremium
-                        Button {
-                            if isLocked {
-                                Haptics.soft()
-                                showPaywall = true
-                            } else {
-                                Haptics.select()
-                                withMotion(Motion.snappy, reduceMotion: reduceMotion) { background = bg }
+                        HStack(spacing: Space.m) {
+                            ForEach(ShareCardBackground.allCases, id: \.self) { bg in
+                                let isLocked = bg.requiresPremium && !isPremium
+                                Button {
+                                    if isLocked {
+                                        Haptics.soft()
+                                        showPaywall = true
+                                    } else {
+                                        Haptics.select()
+                                        withMotion(Motion.snappy, reduceMotion: reduceMotion) { background = bg }
+                                    }
+                                } label: {
+                                    backgroundThumbnail(bg)
+                                }
+                                .buttonStyle(PPPressableStyle())
+                                .accessibilityLabel(isLocked ? "\(bg.title) background, Premium" : "\(bg.title) background")
+                                .accessibilityAddTraits(background == bg ? .isSelected : [])
                             }
-                        } label: {
-                            backgroundThumbnail(bg)
                         }
-                        .buttonStyle(PPPressableStyle())
-                        .accessibilityLabel(isLocked ? "\(bg.title) background, Premium" : "\(bg.title) background")
-                        .accessibilityAddTraits(background == bg ? .isSelected : [])
                     }
-                }
-                .padding(.bottom, Space.m)
 
-                // Card preview (centered, fills remaining space). Owns its own sprite loop
-                // so the frame toggle doesn't rebuild the whole sheet.
-                CardPreview(
-                    renderer: renderer,
-                    cardType: cardType,
-                    data: data,
-                    format: format,
-                    background: background
-                )
+                    // Card preview (centered, fills remaining space). Owns its own sprite loop
+                    // so the frame toggle doesn't rebuild the whole sheet.
+                    CardPreview(
+                        renderer: renderer,
+                        cardType: cardType,
+                        data: data,
+                        format: format,
+                        background: background
+                    )
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, Space.screen)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Card preview")
 
-                Spacer(minLength: Space.m)
-
-                // Action buttons — 4 squares side by side
-                actionButtons
-                    .padding(.horizontal, Space.screen)
-                    .padding(.bottom, 28)
-            }
-            // The live card preview needs most of the screen; keep controls compact.
-            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-
-            // Toast overlay
-            if let message = toastMessage {
-                VStack {
-                    Spacer()
-                    Text(message)
-                        .font(.ppBody.weight(.semibold))
-                        .foregroundColor(Theme.textPrimary)
-                        .padding(.horizontal, Space.screen)
-                        .padding(.vertical, 10)
-                        .background(Color.black.opacity(0.8))
-                        .clipShape(Capsule())
-                        .padding(.bottom, 100)
+                    actionButtons
                 }
-                .transition(.motionSlide(.bottom, reduceMotion: reduceMotion))
-                .zIndex(1)
-                .accessibilityHidden(true)
+                .padding(.horizontal, Space.screen)
+                .padding(.top, Space.s)
+                .padding(.bottom, Space.l)
+                // The live card preview needs most of the screen; keep controls compact.
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+
+                // Toast overlay
+                if let message = toastMessage {
+                    VStack {
+                        Spacer()
+                        Text(message)
+                            .font(.ppBody.weight(.semibold))
+                            .foregroundColor(Theme.textPrimary)
+                            .padding(.horizontal, Space.screen)
+                            .padding(.vertical, 10)
+                            .background(Color.black.opacity(0.8))
+                            .clipShape(Capsule())
+                            .padding(.bottom, 140)
+                    }
+                    .transition(.motionSlide(.bottom, reduceMotion: reduceMotion))
+                    .zIndex(1)
+                    .accessibilityHidden(true)
+                }
+            }
+            .navigationTitle("Share")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
             }
         }
+        .tint(Theme.purpleText)
         .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showPaywall) {
             PaywallView(storeManager: store, gender: data.gender, currentPhase: data.currentPhase)
         }
-    }
-
-    // MARK: - Pills
-
-    private func pill(title: String, horizontalPadding: CGFloat, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            Haptics.select()
-            withMotion(Motion.snappy, reduceMotion: reduceMotion) { action() }
-        } label: {
-            Text(title)
-                .font(.ppRowTitle)
-                .lineLimit(1)
-                .padding(.horizontal, horizontalPadding)
-                .padding(.vertical, 7)
-                .background(isSelected ? Theme.surfaceStrong : Theme.surface)
-                .foregroundColor(isSelected ? Theme.textPrimary : Theme.textTertiary)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(isSelected ? Color.white.opacity(0.2) : Color.clear, lineWidth: 1)
-                )
-                .minTapTarget()
+        .onChange(of: cardType) { _ in Haptics.select() }
+        .onChange(of: format) { _ in Haptics.select() }
+        .task(id: renderConfig) { @MainActor in
+            renderCurrentImage()
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: Space.m) {
-            // Instagram Story
-            actionButton(
-                icon: "camera.fill",
-                label: "Instagram",
-                gradient: [
-                    Color(red: 0.93, green: 0.27, blue: 0.47),
-                    Color(red: 0.6, green: 0.2, blue: 0.8)
-                ]
-            ) {
-                shareToInstagramStory()
+        VStack(spacing: Space.s) {
+            // Primary: system share sheet (covers Messages, copy, save image, etc.)
+            if let image = renderedImage {
+                ShareLink(
+                    item: Image(uiImage: image),
+                    preview: SharePreview("My progress", image: Image(uiImage: image))
+                ) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(PPPrimaryButtonStyle(colors: [Theme.purple, Theme.purpleDeep]))
+                .simultaneousGesture(TapGesture().onEnded { Haptics.tap() })
+            } else {
+                Button {
+                    if renderFailed { showFailure("Couldn't create image") }
+                } label: {
+                    if renderFailed {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    } else {
+                        ProgressView().tint(.white)
+                    }
+                }
+                .buttonStyle(PPPrimaryButtonStyle(colors: [Theme.purple, Theme.purpleDeep]))
+                .accessibilityLabel("Share")
             }
 
-            // Save GIF to Photos
-            actionButton(
-                icon: "arrow.down.to.line",
-                label: "Save GIF",
-                gradient: nil
-            ) {
-                saveToPhotos()
-            }
-
-            // Copy to Clipboard
-            actionButton(
-                icon: "doc.on.doc",
-                label: "Copy",
-                gradient: nil
-            ) {
-                copyToClipboard()
-            }
-
-            // Share
-            actionButton(
-                icon: "square.and.arrow.up",
-                label: "Share",
-                gradient: nil
-            ) {
-                shareGeneral()
+            // Secondary
+            HStack(spacing: Space.m) {
+                secondaryButton(icon: "camera.fill", label: "Instagram Stories") {
+                    shareToInstagramStory()
+                }
+                secondaryButton(icon: "arrow.down.to.line", label: "Save GIF") {
+                    saveToPhotos()
+                }
             }
         }
-        .fixedSize(horizontal: false, vertical: true)
     }
 
-    @ViewBuilder
-    private func actionButton(
-        icon: String,
-        label: String,
-        gradient: [Color]?,
-        action: @escaping () -> Void
-    ) -> some View {
+    private func secondaryButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button {
             Haptics.tap()
             action()
         } label: {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.ppSection.weight(.semibold))
-                    .accessibilityHidden(true)
-                Text(label)
-                    .font(.ppMicro)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundColor(.white)
-            .padding(.vertical, Space.s)
-            .frame(maxWidth: .infinity, minHeight: 72)
-            .background(
-                Group {
-                    if let colors = gradient {
-                        LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                    } else {
-                        Color.white.opacity(0.08)
-                    }
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.button, style: .continuous)
-                    .stroke(gradient == nil ? Color.white.opacity(0.1) : Color.clear, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
+            Label(label, systemImage: icon)
+                .font(.ppBody.weight(.semibold))
+                .foregroundColor(Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: Radius.button, style: .continuous)
+                        .fill(Theme.surfaceStrong)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.button, style: .continuous)
+                        .stroke(Theme.stroke, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
         }
         .buttonStyle(PPPressableStyle())
     }
@@ -295,6 +254,12 @@ struct ShareSheetView: View {
         )
     }
 
+    private func renderCurrentImage() {
+        let image = renderCurrentCard()
+        renderedImage = image
+        renderFailed = image == nil
+    }
+
     private func renderGIF() -> Data? {
         renderer.renderGIFData(
             cardType: cardType,
@@ -322,7 +287,7 @@ struct ShareSheetView: View {
             }
             destinationManager.shareAPNGStickerToInstagramStory(apngData: apngData)
         } else {
-            guard let image = renderCurrentCard() else {
+            guard let image = renderedImage ?? renderCurrentCard() else {
                 showFailure("Couldn't create image")
                 return
             }
@@ -343,24 +308,6 @@ struct ShareSheetView: View {
                 showFailure("Couldn't save to Photos")
             }
         }
-    }
-
-    private func copyToClipboard() {
-        guard let image = renderCurrentCard() else {
-            showFailure("Couldn't create image")
-            return
-        }
-        destinationManager.copyToClipboard(image: image)
-        Haptics.success()
-        showToast("Copied to clipboard")
-    }
-
-    private func shareGeneral() {
-        guard let image = renderCurrentCard() else {
-            showFailure("Couldn't create image")
-            return
-        }
-        destinationManager.presentShareSheet(image: image)
     }
 
     private func showFailure(_ message: String) {
@@ -384,6 +331,13 @@ struct ShareSheetView: View {
             }
         }
     }
+}
+
+/// The inputs that change the exported image; re-rendered whenever this changes.
+private struct RenderConfig: Equatable {
+    let cardType: ShareCardType
+    let format: ShareCardFormat
+    let background: ShareCardBackground
 }
 
 // MARK: - Card Preview

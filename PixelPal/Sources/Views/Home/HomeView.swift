@@ -67,6 +67,16 @@ struct HomeView: View {
             appState.fetchCumulativeSteps(healthManager: healthManager)
             appState.updateState(healthManager: healthManager)
         }
+        // Home has no navigation bar, so give scrolled content a soft edge under the status bar.
+        .overlay(alignment: .top) {
+            GeometryReader { proxy in
+                LinearGradient(colors: [Theme.bgDeep, Theme.bgDeep.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: proxy.safeAreaInsets.top + Space.l)
+                    .ignoresSafeArea(edges: .top)
+                    .accessibilityHidden(true)
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     // MARK: - HealthKit Banners
@@ -345,30 +355,11 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack {
+            // Never wraps ("Pha/se 2"), even with the evolve badge or large text.
             PhaseDisplayView(phase: appState.currentPhase, isPremium: appState.storeManager.isPremium)
+                .fixedSize()
 
-            if isReadyToEvolve {
-                Button(action: showPaywall) {
-                    Text("Ready to evolve")
-                        .font(.ppMicro.weight(.bold))
-                        .foregroundColor(Theme.purpleText)
-                        .padding(.horizontal, Space.s)
-                        .padding(.vertical, Space.xs)
-                        .background(
-                            Capsule()
-                                .fill(Theme.purple.opacity(0.15))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Theme.purple.opacity(0.3), lineWidth: 1)
-                                )
-                        )
-                        .minTapTarget()
-                }
-                .buttonStyle(PPPressableStyle())
-                .accessibilityHint("Opens Premium")
-            }
-
-            Spacer()
+            Spacer(minLength: Space.s)
 
             if !appState.storeManager.isPremium {
                 Button(action: showPaywall) {
@@ -378,10 +369,19 @@ struct HomeView: View {
                         .padding(Space.s)
                         .background(Color.white.opacity(0.08))
                         .clipShape(Circle())
+                        // Ready to evolve: a dot on the crown instead of a text capsule that crowds the bar.
+                        .overlay(alignment: .topTrailing) {
+                            if isReadyToEvolve {
+                                Circle()
+                                    .fill(Theme.purple)
+                                    .frame(width: 12, height: 12)
+                                    .overlay(Circle().stroke(Theme.bgDeep, lineWidth: 2))
+                            }
+                        }
                         .minTapTarget()
                 }
                 .buttonStyle(PPPressableStyle())
-                .accessibilityLabel("Premium")
+                .accessibilityLabel(isReadyToEvolve ? "Premium, ready to evolve" : "Premium")
             }
 
             Button {

@@ -91,7 +91,10 @@ struct PaywallView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                purchasePanel
+                // App Store screenshots must not show prices, so demo captures omit the plans panel.
+                if !LaunchFlags.demoData {
+                    purchasePanel
+                }
             }
         }
         .alert(errorTitle, isPresented: $showError) {

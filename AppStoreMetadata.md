@@ -178,7 +178,8 @@ No objectionable content.
 2. "Lives on your Lock Screen"
 3. "Complete daily missions"
 4. "Track your streak & stats"
-5. "Evolve through 4 phases"
+5. "Evolve through 4 phases" (paywall: phase auras, no prices)
+6. "Choose your pixel companion" (onboarding)
 
 ---
 

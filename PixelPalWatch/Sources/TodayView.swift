@@ -28,7 +28,7 @@ struct TodayView: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.easeOut(duration: 0.6), value: store.progress)
                 WatchSprite(gender: store.snapshot.gender, state: store.state)
-                    .padding(16)
+                    .padding(10)
             }
             .frame(maxHeight: .infinity)
 

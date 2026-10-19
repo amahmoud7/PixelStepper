@@ -26,6 +26,11 @@ struct StreakView: View {
 
             weekSquares
 
+            Text("\(store.week.filter { $0.steps >= store.snapshot.dailyGoal }.count) of 7 days at goal")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)   // the squares already announce this
+
             Spacer(minLength: 0)
 
             HStack(spacing: 4) {

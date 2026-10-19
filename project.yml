@@ -142,6 +142,11 @@ targets:
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        com.apple.security.application-groups:
+          - group.com.pixelpalfit.app.watch
+    dependencies:
+      - target: PixelPalWatchWidgets
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pixelpalfit.app.watchkitapp
@@ -152,3 +157,33 @@ targets:
       SystemCapabilities:
         com.apple.HealthKit:
           enabled: true
+
+  PixelPalWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: PixelPalWatchWidgets/Sources
+      - path: PixelPalWatchWidgets/Resources
+      - path: PixelPal/Sources/Core/AvatarState.swift
+      - path: PixelPal/Sources/Core/SpriteAssets.swift
+      - path: PixelPal/Sources/Core/WatchSnapshot.swift
+      - path: PixelPalWatch/Sources/WatchSharedStore.swift
+    info:
+      path: PixelPalWatchWidgets/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Pixel Stepper
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        NSHealthShareUsageDescription: Pixel Stepper reads your step count to show today's progress on your watch face.
+    entitlements:
+      path: PixelPalWatchWidgets/PixelPalWatchWidgets.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.security.application-groups:
+          - group.com.pixelpalfit.app.watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pixelpalfit.app.watchkitapp.complications
+        TARGETED_DEVICE_FAMILY: "4"
+        SKIP_INSTALL: YES

@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import WatchConnectivity
+import WidgetKit
 
 /// Watch-side state: steps straight from HealthKit, plus the character/phase/streak the iPhone shares.
 @MainActor
@@ -17,7 +18,6 @@ final class WatchStore: NSObject, ObservableObject {
     @Published private(set) var week: [Day] = []
 
     private let healthStore = HKHealthStore()
-    private static let cacheKey = "watchSnapshot"
 
     var state: AvatarState { AvatarLogic.determineState(steps: todaySteps) }
     var progress: Double { snapshot.goalProgress(steps: todaySteps) }
@@ -26,8 +26,7 @@ final class WatchStore: NSObject, ObservableObject {
         // Last known values first, so the screen isn't empty before the phone checks in.
         if WatchLaunch.demoData {
             self.snapshot = WatchLaunch.Demo.snapshot
-        } else if let cached = UserDefaults.standard.dictionary(forKey: Self.cacheKey),
-           let snapshot = WatchSnapshot(dictionary: cached) {
+        } else if let snapshot = WatchSharedStore.load() {
             self.snapshot = snapshot
         } else {
             self.snapshot = .placeholder
@@ -81,7 +80,11 @@ final class WatchStore: NSObject, ObservableObject {
             days.append(Day(date: calendar.startOfDay(for: statistics.startDate), steps: Int(steps)))
         }
         week = days
-        todaySteps = days.last(where: { calendar.isDate($0.date, inSameDayAs: today) })?.steps ?? 0
+        let steps = days.last(where: { calendar.isDate($0.date, inSameDayAs: today) })?.steps ?? 0
+        if steps != todaySteps {
+            todaySteps = steps
+            WidgetCenter.shared.reloadAllTimelines()   // keep complications in step with the app
+        }
     }
 
     // MARK: - Snapshot from the iPhone
@@ -89,7 +92,8 @@ final class WatchStore: NSObject, ObservableObject {
     fileprivate func apply(_ context: [String: Any]) {
         guard let snapshot = WatchSnapshot(dictionary: context) else { return }
         self.snapshot = snapshot
-        UserDefaults.standard.set(context, forKey: Self.cacheKey)
+        WatchSharedStore.save(context)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }
 

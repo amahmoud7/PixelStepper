@@ -7,7 +7,7 @@ struct ContentView: View {
     @StateObject private var appState = AppStateManager()
     /// Observed so finishing onboarding switches to the tabs (and reloads state) immediately.
     @ObservedObject private var persistence = PersistenceManager.shared
-    @State private var showSplash = true
+    @State private var showSplash = !LaunchFlags.uiTest
 
     var body: some View {
         ZStack {
@@ -31,11 +31,12 @@ struct ContentView: View {
         }
         .motion(Motion.smooth, value: isOnboardingComplete)
         .onAppear {
+            prepareForUITestsIfNeeded()
             appState.loadSavedData()
             // Ask for Health access only after onboarding has explained why (idempotent once answered).
             // Today's/weekly fetch happens in the authorization callback;
             // cumulative fetch follows via onChange(isAuthorized).
-            if isOnboardingComplete {
+            if isOnboardingComplete && !LaunchFlags.uiTest {
                 healthManager.requestAuthorization { _ in }
             }
             Task {
@@ -48,7 +49,9 @@ struct ContentView: View {
             guard completed else { return }
             // Pick up the chosen character and generate today's missions without a relaunch.
             appState.loadSavedData()
-            healthManager.requestAuthorization { _ in }
+            if !LaunchFlags.uiTest {
+                healthManager.requestAuthorization { _ in }
+            }
         }
         .onChange(of: healthManager.currentSteps) { _ in
             appState.updateState(healthManager: healthManager)
@@ -84,6 +87,17 @@ struct ContentView: View {
 
     private var isOnboardingComplete: Bool {
         persistence.userProfile != nil
+    }
+
+    /// Screenshot tests: start clean or pre-onboarded. No-op for normal launches.
+    private func prepareForUITestsIfNeeded() {
+        guard LaunchFlags.uiTest else { return }
+        if LaunchFlags.resetData {
+            persistence.clearAll()
+        }
+        if LaunchFlags.skipOnboarding && persistence.userProfile == nil {
+            persistence.saveUserProfile(UserProfile.createNew(gender: .female))
+        }
     }
 }
 

@@ -27,6 +27,7 @@ schemes:
     test:
       targets:
         - PixelPalTests
+        - PixelPalUITests
 
 targets:
   PixelPal:
@@ -101,3 +102,17 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.pixelpalfit.app.tests
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1"
+
+  PixelPalUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: PixelPalUITests
+    dependencies:
+      - target: PixelPal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pixelpalfit.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        TEST_TARGET_NAME: PixelPal

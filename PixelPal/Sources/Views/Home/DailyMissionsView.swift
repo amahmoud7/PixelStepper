@@ -4,30 +4,11 @@ import SwiftUI
 struct DailyMissionsView: View {
     @EnvironmentObject var appState: AppStateManager
     @State private var lastCompleted: Int?
-    /// Observed so the coin balance updates live.
-    @ObservedObject private var persistence = PersistenceManager.shared
-
-    private var coinBalance: Int {
-        persistence.progressState.stepCoinBalance
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {
-            // Header: Daily missions + coin balance
-            SectionHeader("Daily missions") {
-                HStack(spacing: Space.xs) {
-                    CoinIcon()
-                    Text("\(coinBalance)")
-                        .font(.ppRowTitle)
-                        .foregroundColor(Theme.gold)
-                        .numericRoll(value: coinBalance)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .ppCard(padding: 0, radius: Radius.chip, tint: Theme.gold)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(coinBalance) coins")
-            }
+            // Coins are hidden until the shop ships; balances still accrue.
+            SectionHeader("Daily missions")
 
             // Mission rows
             ForEach(appState.missionManager.missions) { mission in
@@ -126,18 +107,6 @@ extension SectionHeader where Accessory == EmptyView {
     }
 }
 
-// MARK: - Coin Icon
-
-/// The one coin glyph used across Home.
-private struct CoinIcon: View {
-    var body: some View {
-        Image(systemName: "circle.fill")
-            .font(.caption2)
-            .foregroundStyle(Theme.gold)
-            .accessibilityHidden(true)
-    }
-}
-
 // MARK: - Mission Row
 
 private struct MissionRow: View {
@@ -150,9 +119,9 @@ private struct MissionRow: View {
 
     private var accessibilityText: String {
         if mission.isCompleted {
-            return "\(mission.title), \(mission.coinReward) coins"
+            return mission.title
         }
-        return "\(mission.title), \(mission.progress.formatted()) of \(mission.target.formatted()), \(mission.coinReward) coins"
+        return "\(mission.title), \(mission.progress.formatted()) of \(mission.target.formatted())"
     }
 
     var body: some View {
@@ -182,15 +151,6 @@ private struct MissionRow: View {
                 }
 
                 Spacer()
-
-                // Coin reward
-                HStack(spacing: 3) {
-                    Text(mission.isCompleted ? "+\(mission.coinReward)" : "\(mission.coinReward)")
-                        .font(.ppMicro.weight(.bold))
-                        .foregroundColor(Theme.gold)
-                    CoinIcon()
-                        .opacity(mission.isCompleted ? 1 : 0.6)
-                }
             }
             .padding(.leading, 13)
             .padding(.trailing, 14)
@@ -290,7 +250,6 @@ private struct WeeklyChallengeRow: View {
         if !challenge.isCompleted {
             parts.append("\(challenge.progress.formatted()) of \(challenge.target.formatted())")
         }
-        parts.append("\(challenge.coinReward) coins")
         parts.append(daysLeftText)
         return parts.joined(separator: ", ")
     }
@@ -354,13 +313,6 @@ private struct WeeklyChallengeRow: View {
                 }
 
                 Spacer()
-
-                HStack(spacing: 3) {
-                    Text("\(challenge.coinReward)")
-                        .font(.ppCaption.weight(.bold))
-                        .foregroundColor(Theme.gold)
-                    CoinIcon()
-                }
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)

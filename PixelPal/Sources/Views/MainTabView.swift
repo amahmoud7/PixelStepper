@@ -43,10 +43,6 @@ struct MainTabView: View {
         .sheet(isPresented: $appState.showShareSheet) {
             ShareSheetView(data: appState.shareCardData)
         }
-        .onChange(of: appState.stepCoinToast) { coins in
-            guard let coins else { return }
-            UIAccessibility.post(notification: .announcement, argument: "Plus \(coins) coins")
-        }
     }
 
     // MARK: - Overlays
@@ -66,11 +62,6 @@ struct MainTabView: View {
                 .transition(.opacity)
             }
 
-            // Step Moment overlay (only when no celebration showing)
-            if appState.showStepMoment && appState.showCelebration == nil {
-                StepMomentView()
-                    .transition(.opacity)
-            }
         }
         .motion(Motion.smooth, value: appState.showCelebration != nil)
     }
@@ -81,39 +72,5 @@ private extension View {
     func tabScreenBackground() -> some View {
         frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.backgroundGradient.ignoresSafeArea())
-            .overlay(alignment: .bottom) { CoinToastOverlay() }
-    }
-}
-
-/// "+N coins" toast. Lives inside each tab so it sits above the system tab bar at any height.
-private struct CoinToastOverlay: View {
-    @EnvironmentObject var appState: AppStateManager
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        ZStack {
-            // The celebration overlay already shows coins, so skip the toast under it.
-            if let coins = appState.stepCoinToast, appState.showCelebration == nil {
-                HStack(spacing: Space.s) {
-                    Image(systemName: "circle.fill")
-                        .font(.ppCaption)
-                        .foregroundStyle(Theme.gold)
-                        .accessibilityHidden(true)
-                    Text("+\(coins) coins")
-                        .font(.ppBody.weight(.bold))
-                        .foregroundStyle(Theme.textPrimary)
-                        .numericRoll(value: coins)
-                }
-                .padding(.horizontal, Space.xl)
-                .padding(.vertical, Space.m)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
-                .padding(.bottom, Space.m)
-                .transition(.motionSlide(.bottom, reduceMotion: reduceMotion))
-            }
-        }
-        .allowsHitTesting(false)
-        .motion(Motion.snappy, value: appState.stepCoinToast)
     }
 }

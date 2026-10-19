@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Manages daily history tracking for 7-Day Memory UI and Phase Decay.
+/// Manages daily history tracking (week view, calendar, streaks).
 @MainActor
 class HistoryManager: ObservableObject {
     /// Shared instance.
@@ -143,37 +143,6 @@ class HistoryManager: ObservableObject {
         let (_, frozenDate) = history.countConsecutiveGoalsMetWithFreeze()
         return frozenDate != nil
     }
-
-    /// Backfills missing days with placeholder data.
-    /// Call when app has been killed for several days.
-    func backfillMissingDays() {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        
-        // Look back up to 30 days
-        for dayOffset in -30...(-1) {
-            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: today) else { continue }
-            
-            if history.state(for: date) == nil {
-                // Missing day - create placeholder
-                // For new users, treat as 0 steps (neutral)
-                // For existing users, we could estimate but 0 is safer
-                let placeholder = DailyGoalState.create(for: date, steps: 0, goal: dailyGoal)
-                history.recordDay(placeholder)
-            }
-        }
-        
-        persistence.saveDailyHistory(history)
-    }
-    
-    /// Gets goal status for a specific date.
-    func goalStatus(for date: Date) -> GoalStatus {
-        guard let day = history.state(for: date) else {
-            return .unknown
-        }
-        
-        return day.isGoalMet ? .met : .missed
-    }
     
     /// Reset history (for testing).
     func reset() {
@@ -202,9 +171,6 @@ class HistoryManager: ObservableObject {
     private func handleDayChange() {
         finalizePreviousDay()
         refreshHistory()
-        
-        // Notify phase decay manager
-        PhaseDecayManager.shared.handleDayChange()
     }
     
     private func finalizePreviousDay() {
@@ -216,21 +182,6 @@ class HistoryManager: ObservableObject {
         // Nothing special needed - steps won't be updated for past dates
         // Just persist current state
         persistence.saveDailyHistory(history)
-    }
-}
-
-/// Goal status for a specific day.
-enum GoalStatus: Equatable {
-    case met
-    case missed
-    case unknown
-    
-    var color: String {
-        switch self {
-        case .met: return "#34C759"
-        case .missed: return "#FF3B30"
-        case .unknown: return "#8E8E93"
-        }
     }
 }
 

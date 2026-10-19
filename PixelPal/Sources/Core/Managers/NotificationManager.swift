@@ -42,7 +42,8 @@ final class NotificationManager {
 
     /// Reschedules the recurring notifications. One-shot ones (streak, re-engagement, step moment) are left alone.
     func refreshSchedule() {
-        center.removePendingNotificationRequests(withIdentifiers: recurringIdentifiers)
+        // "step_moment" is from a removed feature; clear any still pending on upgraded devices.
+        center.removePendingNotificationRequests(withIdentifiers: recurringIdentifiers + ["step_moment"])
         scheduleAll()
     }
 

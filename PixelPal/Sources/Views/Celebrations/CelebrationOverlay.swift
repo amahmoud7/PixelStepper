@@ -3,7 +3,7 @@ import SwiftUI
 /// Spotlight Stage celebration — dark stage, golden spotlight, sparkles, "Milestone Unlocked" badge, gold CTA.
 struct CelebrationOverlay: View {
     let event: CelebrationEvent
-    /// Coins actually awarded for this event; the pill is hidden when nil or 0.
+    /// Coins awarded for this event. Not rendered while coins are hidden (no shop yet); kept for the call site.
     var coins: Int? = nil
     /// Used to draw the evolved character for `.phaseEvolution`.
     var gender: Gender = .male
@@ -31,11 +31,6 @@ struct CelebrationOverlay: View {
         case .stepMilestone: return Theme.blue
         case .weeklyChallenge: return Theme.gold
         }
-    }
-
-    private var awardedCoins: Int? {
-        guard let coins, coins > 0 else { return nil }
-        return coins
     }
 
     var body: some View {
@@ -132,31 +127,6 @@ struct CelebrationOverlay: View {
                     .padding(.horizontal, 32)
                     .lineSpacing(3)
                     .opacity(isShowing ? 1 : 0)
-
-                // Coin reward pill (only when coins were actually awarded)
-                if let awardedCoins {
-                    HStack(spacing: 6) {
-                        Image(systemName: "circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(Theme.gold)
-                            .accessibilityHidden(true)
-                        Text("+\(awardedCoins) coins earned")
-                            .font(.ppRowTitle)
-                            .foregroundColor(Theme.gold)
-                    }
-                    .padding(.horizontal, Space.l)
-                    .padding(.vertical, 7)
-                    .background(
-                        Capsule()
-                            .fill(Theme.gold.opacity(0.08))
-                            .overlay(
-                                Capsule()
-                                    .stroke(Theme.gold.opacity(0.15), lineWidth: 1)
-                            )
-                    )
-                    .padding(.top, 20)
-                    .opacity(isShowing ? 1 : 0)
-                }
 
                 Spacer()
 

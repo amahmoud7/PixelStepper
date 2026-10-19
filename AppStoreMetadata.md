@@ -21,7 +21,7 @@ Pixel Stepper turns your daily steps into a living pixel character. No guilt tri
 **How it works:**
 - Your character appears on your Lock Screen and Dynamic Island
 - Walk more, and they become more energetic
-- Complete daily missions to earn Step Coins
+- Complete daily missions
 - Track your streak and build consistency
 - Keep walking to unlock new evolution phases
 
@@ -31,7 +31,6 @@ Pixel Stepper turns your daily steps into a living pixel character. No guilt tri
 - 4 evolution phases to unlock through walking
 - 3 daily missions that refresh every day
 - Weekly challenges for extra rewards
-- Step Coins earned through real movement
 - Streak tracking with daily step goals
 - 30-day activity calendar and personal records
 - Share cards to show off your progress
@@ -54,7 +53,7 @@ walking,pedometer,step counter,pet,widget,lock screen,dynamic island,streak,miss
 
 Massive update! Here's what's new:
 
-- Daily missions — complete 3 quests every day to earn Step Coins
+- Daily missions — 3 fresh goals every day
 - Weekly challenges for bonus rewards
 - Streak tracking — build your daily walking streak
 - 30-day activity calendar and personal records
@@ -70,7 +69,7 @@ Massive update! Here's what's new:
 
 ## Promotional Text
 
-Your daily steps bring a pixel companion to life — right on your Lock Screen. Complete missions, build streaks, and earn Step Coins!
+Your daily steps bring a pixel companion to life — right on your Lock Screen. Complete daily missions and build your streak.
 
 ---
 
@@ -141,18 +140,15 @@ https://github.com/amahmoud7/PixelStepper/issues
 ## App Review Notes
 
 **HealthKit Usage:**
-Pixel Stepper reads step count data from HealthKit to determine the character's energy state (vital/neutral/low), track daily missions, calculate streaks, and award Step Coins. This is the core mechanic of the app - the character's appearance and progression reflect the user's daily movement. The HealthKit permission request uses the standard system dialog with neutral button text ("Continue"). If the user declines permission, the app remains fully functional but step data shows as 0, and a help banner provides guidance on enabling access through the Health app.
+Pixel Stepper reads step count data from HealthKit to determine the character's energy state (vital/neutral/low), track daily missions, and calculate streaks. This is the core mechanic of the app - the character's appearance and progression reflect the user's daily movement. The HealthKit permission request uses the standard system dialog with neutral button text ("Continue"). If the user declines permission, the app remains fully functional but step data shows as 0, and a help banner provides guidance on enabling access through the Health app.
 
 **Live Activity:**
 The app uses Live Activities to display the pixel character on the Lock Screen and Dynamic Island. The character animates between 2 frames locally using TimelineView. Live Activity content updates when step count changes significantly (not continuously).
 
-**Step Coins:**
-Step Coins are a virtual currency earned exclusively through walking activity (completing daily missions, maintaining streaks, hitting step milestones). No real money can purchase Step Coins directly — they are purely earned through physical activity.
-
 **Business Model:**
 1. **Who are the users?** Health-conscious individuals who want a fun, gamified walking motivation app. The app is suitable for all ages (4+).
 2. **Where can users purchase features?** Premium subscriptions are available exclusively through Apple's in-app purchase system (StoreKit 2). The paywall is accessible from the Home tab (crown icon) and the Profile tab. Subscriptions are auto-renewable.
-3. **What can premium users access?** Premium subscribers unlock: all 4 evolution phases (free users get phases 1-2), 2x Step Coin earnings, weekly challenges, streak freeze protection, and premium share card styles.
+3. **What can premium users access?** Premium subscribers unlock: all 4 evolution phases (free users get phases 1-2), 5 daily missions, weekly challenges, streak freeze protection, and premium share card styles.
 4. **What is available without purchase?** The core app is fully functional for free: step tracking, pixel character animation, Live Activity, Home Screen widget, phases 1-2, 3 daily missions, streak tracking, and standard share cards. Premium enhances the experience but is not required.
 
 **Demo Instructions:**

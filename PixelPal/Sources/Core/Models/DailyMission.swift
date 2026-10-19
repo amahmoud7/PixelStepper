@@ -49,7 +49,7 @@ enum MissionType: String, Codable, CaseIterable {
         case .stepTarget: return "#34C759"
         case .morningWalk: return "#FF9500"
         case .eveningPush: return "#AF52DE"
-        case .streakExtend: return "#FF3B30"
+        case .streakExtend: return "#FF9900"
         case .goalCrush: return "#FFD700"
         case .consistentDay: return "#007AFF"
         }

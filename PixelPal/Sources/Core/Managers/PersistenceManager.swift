@@ -26,7 +26,6 @@ class PersistenceManager: ObservableObject {
         static let progressState = "ProgressState.json"
         static let entitlements = "Entitlements.json"
         static let dailyHistory = "DailyHistory.json"
-        static let phaseDecayState = "PhaseDecayState.json"
         static let cosmeticInventory = "CosmeticInventory.json"
     }
 
@@ -122,18 +121,6 @@ class PersistenceManager: ObservableObject {
     /// Saves daily history to disk.
     func saveDailyHistory(_ history: DailyHistory) {
         save(history, to: FileName.dailyHistory)
-    }
-
-    // MARK: - Phase Decay State
-
-    /// Loads phase decay state from disk.
-    var phaseDecayState: PhaseDecayState? {
-        Self.load(FileName.phaseDecayState, as: PhaseDecayState.self)
-    }
-
-    /// Saves phase decay state to disk.
-    func savePhaseDecayState(_ state: PhaseDecayState) {
-        save(state, to: FileName.phaseDecayState)
     }
 
     // MARK: - Private Helpers

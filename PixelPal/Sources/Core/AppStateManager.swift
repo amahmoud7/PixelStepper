@@ -17,7 +17,6 @@ class AppStateManager: ObservableObject {
     @Published var showPaywall: Bool = false
     @Published var showShareSheet: Bool = false
     @Published var showCelebration: CelebrationEvent?
-    @Published var showStepMoment: Bool = false
     @Published var stepCoinToast: Int?
 
     /// Paywall requested while a celebration was on screen; shown after it's dismissed.
@@ -29,7 +28,6 @@ class AppStateManager: ObservableObject {
     let storeManager = StoreManager.shared
     let celebrationManager = CelebrationManager()
     let missionManager = MissionManager()
-    let stepMomentManager = StepMomentManager()
     let cosmeticManager = CosmeticManager()
 
     var currentLoadout: CosmeticLoadout {

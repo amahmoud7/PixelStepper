@@ -21,13 +21,22 @@ struct SharedData {
 
     static func saveState(state: AvatarState, steps: Double, phase: Int = 1) {
         guard let defaults = userDefaults else { return }
+        let wasUpdatedToday = (defaults.object(forKey: Keys.lastUpdateDate) as? Date)
+            .map { Calendar.current.isDateInToday($0) } ?? false
+        let changed = !wasUpdatedToday
+            || defaults.string(forKey: Keys.avatarState) != state.rawValue
+            || defaults.double(forKey: Keys.currentSteps) != steps
+            || defaults.integer(forKey: Keys.currentPhase) != phase
+
         defaults.set(state.rawValue, forKey: Keys.avatarState)
         defaults.set(steps, forKey: Keys.currentSteps)
         defaults.set(phase, forKey: Keys.currentPhase)
         defaults.set(Date(), forKey: Keys.lastUpdateDate)
 
-        // Reload widget
-        WidgetCenter.shared.reloadAllTimelines()
+        // Reload widgets only when what they show changed (reloads are budgeted).
+        if changed {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     static func savePhase(_ phase: Int) {

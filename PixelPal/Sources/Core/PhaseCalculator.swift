@@ -149,23 +149,20 @@ struct MilestoneCalculator {
     ///   - previousSteps: Previous cumulative step count.
     ///   - currentSteps: Current cumulative step count.
     /// - Returns: The milestone value if one was just crossed, nil otherwise.
+    /// When several are crossed at once, returns the highest (lower ones are superseded).
     static func checkMilestone(previousSteps: Int, currentSteps: Int) -> Int? {
-        for milestone in milestones {
-            if previousSteps < milestone && currentSteps >= milestone {
-                return milestone
-            }
-        }
-        return nil
+        milestones.last { previousSteps < $0 && currentSteps >= $0 }
     }
 
     /// Formats a milestone for display (e.g., "5k!", "100k!").
     /// - Parameter milestone: The milestone value.
     /// - Returns: Formatted string for display.
     static func formatMilestone(_ milestone: Int) -> String {
+        let oneDecimal = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...1))
         if milestone >= 1_000_000 {
-            return "\(milestone / 1_000_000)M!"
+            return "\((Double(milestone) / 1_000_000).formatted(oneDecimal))M!"
         } else if milestone >= 1_000 {
-            return "\(milestone / 1_000)k!"
+            return "\((Double(milestone) / 1_000).formatted(oneDecimal))k!"
         } else {
             return "\(milestone)!"
         }

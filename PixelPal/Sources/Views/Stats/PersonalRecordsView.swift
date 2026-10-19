@@ -1,100 +1,112 @@
 import SwiftUI
 
-/// Grid of personal bests: best day, longest streak, total steps, active days.
+/// Grid of personal bests: best day, longest streak, total steps, goal days.
 struct PersonalRecordsView: View {
+    /// Observed so the records re-render when progress is saved (a computed read alone wouldn't).
+    @ObservedObject private var persistence = PersistenceManager.shared
+
     private var progress: ProgressState {
-        PersistenceManager.shared.progressState
+        persistence.progressState
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Space.m) {
             HStack {
-                Text("Personal Records")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                Text("Personal records")
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
             }
 
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ], spacing: 12) {
+                GridItem(.flexible(), spacing: Space.m),
+                GridItem(.flexible(), spacing: Space.m)
+            ], spacing: Space.m) {
                 recordCard(
                     icon: "trophy.fill",
-                    color: .yellow,
-                    value: progress.bestDaySteps > 0 ? "\(progress.bestDaySteps.formatted())" : "--",
-                    label: "Best Day",
+                    color: Theme.gold,
+                    value: progress.bestDaySteps > 0 ? "\(progress.bestDaySteps.formatted())" : "—",
+                    label: "Best day",
                     subtitle: bestDaySubtitle
                 )
 
                 recordCard(
                     icon: "flame.fill",
-                    color: .orange,
+                    color: Theme.amber,
                     value: "\(progress.longestStreak)",
-                    label: "Longest Streak",
-                    subtitle: progress.longestStreak > 0 ? "\(progress.longestStreak) days" : "Start walking!"
+                    label: "Longest streak",
+                    subtitle: streakSubtitle
                 )
 
                 recordCard(
                     icon: "figure.walk",
-                    color: .green,
+                    color: Theme.mint,
                     value: formatLargeNumber(progress.totalStepsSinceStart),
-                    label: "Total Steps",
+                    label: "Total steps",
                     subtitle: "All time"
                 )
 
                 recordCard(
                     icon: "calendar",
-                    color: .blue,
+                    color: Theme.blue,
                     value: "\(progress.totalActiveDays)",
-                    label: "Active Days",
-                    subtitle: "Goals met"
+                    label: "Goal days",
+                    subtitle: "All time"
                 )
             }
         }
         .glassCard()
     }
 
-    private var bestDaySubtitle: String {
-        guard let date = progress.bestDayDate else { return "No data yet" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date)
+    private var streakSubtitle: String {
+        switch progress.longestStreak {
+        case 0: return "Start walking!"
+        case 1: return "day in a row"
+        default: return "days in a row"
+        }
     }
 
+    private var bestDaySubtitle: String {
+        guard let date = progress.bestDayDate else { return "No data yet" }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
+    /// Locale-aware compact number ("12.3K", "1.2M", or the local equivalent).
     private func formatLargeNumber(_ number: Int) -> String {
-        if number >= 1_000_000 {
-            return String(format: "%.1fM", Double(number) / 1_000_000)
-        } else if number >= 1_000 {
-            return String(format: "%.1fK", Double(number) / 1_000)
-        }
-        return "\(number)"
+        Double(number).formatted(.number.notation(.compactName).precision(.fractionLength(0...1)))
     }
 
     @ViewBuilder
     private func recordCard(icon: String, color: Color, value: String, label: String, subtitle: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.ppStat)
                 .foregroundColor(color)
+                .accessibilityHidden(true)
 
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .font(.ppStat)
+                .foregroundColor(Theme.textPrimary)
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .numericRoll(value: value)
 
             Text(label)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(.white.opacity(0.8))
+                .font(.ppCaption.weight(.semibold))
+                .foregroundColor(Theme.textSecondary)
+                .multilineTextAlignment(.center)
 
             Text(subtitle)
-                .font(.caption2)
-                .foregroundColor(.gray)
+                .font(.ppMicro)
+                .foregroundColor(Theme.textTertiary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(12)
+        .ppCard(padding: Space.m, radius: Radius.row)
+        .accessibilityElement(children: .ignore)
+        // "—" would be read as "em dash".
+        .accessibilityLabel("\(label), \(value == "—" ? "No data yet" : value), \(subtitle)")
     }
 }

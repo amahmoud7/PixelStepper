@@ -43,9 +43,11 @@ class LiveActivityManager: ObservableObject {
 
     /// Checks if there's an existing Live Activity and restores reference to it.
     private func checkForExistingActivity() {
-        if let existing = Activity<PixelStepperAttributes>.activities.first {
+        // Ignore activities that already ended (e.g. swiped away or expired after 8h).
+        if let existing = Activity<PixelStepperAttributes>.activities.first(where: { $0.activityState == .active }) {
             self.currentActivity = existing
             self.isActive = true
+            observeEnd(of: existing)
         }
     }
 
@@ -90,6 +92,8 @@ class LiveActivityManager: ObservableObject {
             )
             self.currentActivity = activity
             self.isActive = true
+            self.lastSentState = nil
+            self.observeEnd(of: activity)
             print("Started Live Activity: \(activity.id)")
         } catch {
             print("Failed to start Live Activity: \(error)")
@@ -116,6 +120,11 @@ class LiveActivityManager: ObservableObject {
         currentPhase = phase
 
         // Check for milestone (using cumulative steps)
+        // First update this session: adopt the current total instead of "crossing" every
+        // milestone from 0 (which flashed a milestone on every cold start).
+        if previousCumulativeSteps == 0 {
+            previousCumulativeSteps = cumulativeSteps
+        }
         if cumulativeSteps > previousCumulativeSteps {
             if let milestone = MilestoneCalculator.checkMilestone(
                 previousSteps: previousCumulativeSteps,
@@ -126,34 +135,63 @@ class LiveActivityManager: ObservableObject {
         }
         previousCumulativeSteps = cumulativeSteps
 
-        // Detect if user is walking (steps increased)
-        let stepsIncreased = steps > previousSteps
+        // "Walking" = steps rose since the last update this session (never on cold start),
+        // so the activity can't get stuck walking and the step count keeps updating.
+        let stepsIncreased = previousSteps > 0 && steps > previousSteps
         previousSteps = steps
+        isWalking = stepsIncreased
+        push(activity, steps: steps)
+    }
 
-        if stepsIncreased && !isWalking {
-            // Start walking animation
-            startWalkingAnimation(steps: steps)
-        } else if !stepsIncreased && isWalking {
-            // Stop walking animation after a delay
-            stopWalkingAnimation(steps: steps)
-        } else if !isWalking {
-            // Normal update (not walking) - idle state, no step count per UI rules
-            let contentState = PixelStepperAttributes.ContentState(
-                steps: steps,
-                state: state,
-                gender: gender,
-                isWalking: false,
-                walkingFrame: 1,
-                currentPhase: phase,
-                milestoneText: currentMilestone,
-                showStepCount: currentMilestone != nil  // Show during milestone celebration
-            )
+    /// Returns the activity to idle when the app leaves the foreground (no more step updates arrive).
+    /// Also clears a milestone banner, since its timer can't fire while the app is suspended.
+    func markIdle() {
+        guard let activity = currentActivity, isWalking || currentMilestone != nil else { return }
+        isWalking = false
+        currentMilestone = nil
+        milestoneTimer?.invalidate()
+        milestoneTimer = nil
+        push(activity, steps: previousSteps)
+    }
 
-            Task {
-                await activity.update(
-                    ActivityContent(state: contentState, staleDate: nil)
-                )
+    /// Keeps `isActive` honest when the user dismisses the activity or the system ends it.
+    private var endObservation: Task<Void, Never>?
+
+    private func observeEnd(of activity: Activity<PixelStepperAttributes>) {
+        endObservation?.cancel()
+        endObservation = Task { [weak self] in
+            for await state in activity.activityStateUpdates where state == .dismissed || state == .ended {
+                guard let self, self.currentActivity?.id == activity.id else { return }
+                self.currentActivity = nil
+                self.isActive = false
+                self.isWalking = false
+                self.lastSentState = nil
+                return
             }
+        }
+    }
+
+    /// Last content sent, to skip identical updates (ActivityKit budgets updates).
+    private var lastSentState: PixelStepperAttributes.ContentState?
+
+    private func push(_ activity: Activity<PixelStepperAttributes>, steps: Int) {
+        let contentState = PixelStepperAttributes.ContentState(
+            steps: steps,
+            state: currentState,
+            gender: currentGender,
+            isWalking: isWalking,
+            walkingFrame: 1,
+            currentPhase: currentPhase,
+            milestoneText: currentMilestone,
+            showStepCount: isWalking || currentMilestone != nil
+        )
+        guard contentState != lastSentState else { return }
+        lastSentState = contentState
+
+        Task {
+            await activity.update(
+                ActivityContent(state: contentState, staleDate: nil)
+            )
         }
     }
 
@@ -205,73 +243,9 @@ class LiveActivityManager: ObservableObject {
         currentMilestone = nil
         milestoneTimer?.invalidate()
         milestoneTimer = nil
-
         guard let activity = currentActivity else { return }
-
-        let contentState = PixelStepperAttributes.ContentState(
-            steps: steps,
-            state: currentState,
-            gender: currentGender,
-            isWalking: isWalking,
-            walkingFrame: 1,
-            currentPhase: currentPhase,
-            milestoneText: nil,
-            showStepCount: isWalking
-        )
-
-        Task {
-            await activity.update(
-                ActivityContent(state: contentState, staleDate: nil)
-            )
-        }
-    }
-
-    /// Starts walking state — sends ONE update, animation handled locally by TimelineView in widget.
-    private func startWalkingAnimation(steps: Int) {
-        isWalking = true
-
-        guard let activity = currentActivity else { return }
-
-        let contentState = PixelStepperAttributes.ContentState(
-            steps: steps,
-            state: currentState,
-            gender: currentGender,
-            isWalking: true,
-            walkingFrame: 1,
-            currentPhase: currentPhase,
-            milestoneText: currentMilestone,
-            showStepCount: true
-        )
-
-        Task {
-            await activity.update(
-                ActivityContent(state: contentState, staleDate: nil)
-            )
-        }
-    }
-
-    /// Stops walking state — sends ONE update to return to idle.
-    private func stopWalkingAnimation(steps: Int) {
-        isWalking = false
-
-        guard let activity = currentActivity else { return }
-
-        let contentState = PixelStepperAttributes.ContentState(
-            steps: steps,
-            state: currentState,
-            gender: currentGender,
-            isWalking: false,
-            walkingFrame: 1,
-            currentPhase: currentPhase,
-            milestoneText: currentMilestone,
-            showStepCount: currentMilestone != nil
-        )
-
-        Task {
-            await activity.update(
-                ActivityContent(state: contentState, staleDate: nil)
-            )
-        }
+        // Latest known steps, deduped like every other update.
+        push(activity, steps: max(steps, previousSteps))
     }
 
     /// Ends the current Live Activity.
@@ -285,11 +259,14 @@ class LiveActivityManager: ObservableObject {
 
         guard let activity = currentActivity else { return }
 
+        lastSentState = nil
         Task {
             await activity.end(nil, dismissalPolicy: .immediate)
-            self.currentActivity = nil
-            self.isActive = false
-            print("Ended Live Activity")
+            // A new activity may have started while this one was ending; don't orphan it.
+            if self.currentActivity?.id == activity.id {
+                self.currentActivity = nil
+                self.isActive = false
+            }
         }
     }
 

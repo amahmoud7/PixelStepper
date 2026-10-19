@@ -7,6 +7,7 @@ enum CelebrationEvent: Equatable, Identifiable {
     case dailyGoalMet(steps: Int)
     case personalRecord(type: String, value: Int)
     case stepMilestone(cumulative: Int)
+    case weeklyChallenge(title: String)
 
     var id: String {
         switch self {
@@ -15,6 +16,7 @@ enum CelebrationEvent: Equatable, Identifiable {
         case .dailyGoalMet(let steps): return "goal_\(steps)"
         case .personalRecord(let type, let value): return "record_\(type)_\(value)"
         case .stepMilestone(let cumulative): return "milestone_\(cumulative)"
+        case .weeklyChallenge(let title): return "weekly_\(title)"
         }
     }
 
@@ -25,6 +27,7 @@ enum CelebrationEvent: Equatable, Identifiable {
         case .dailyGoalMet: return "Goal Crushed!"
         case .personalRecord(let type, _): return "New \(type)!"
         case .stepMilestone(let cumulative): return "\(MilestoneCalculator.formatMilestone(cumulative)) Steps!"
+        case .weeklyChallenge: return "Weekly Challenge Complete!"
         }
     }
 
@@ -37,6 +40,7 @@ enum CelebrationEvent: Equatable, Identifiable {
         case .dailyGoalMet(let steps): return "\(steps.formatted()) steps today. You did it!"
         case .personalRecord(_, let value): return "\(value.formatted()) steps - a new personal best!"
         case .stepMilestone(let cumulative): return "\(cumulative.formatted()) total steps and counting!"
+        case .weeklyChallenge(let title): return "\(title): done. What a week!"
         }
     }
 
@@ -47,6 +51,7 @@ enum CelebrationEvent: Equatable, Identifiable {
         case .dailyGoalMet(let steps): return "Crushed my \(steps.formatted())-step goal on Pixel Stepper!"
         case .personalRecord(let type, let value): return "New \(type): \(value.formatted()) steps on Pixel Stepper!"
         case .stepMilestone(let cumulative): return "Just hit \(cumulative.formatted()) total steps on Pixel Stepper!"
+        case .weeklyChallenge(let title): return "Completed the \(title) weekly challenge on Pixel Stepper!"
         }
     }
 }

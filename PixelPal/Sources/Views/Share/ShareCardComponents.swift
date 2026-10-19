@@ -151,7 +151,7 @@ struct ShareWeekDots: View {
         } else if day.steps >= 2500 {
             return .yellow
         } else {
-            return Color(hex: "#FF3B30")
+            return Color(hex: "#FFB34D") // soft amber, never red
         }
     }
 }
@@ -214,7 +214,7 @@ struct ShareBarChartView: View {
         } else if day.steps >= 2500 {
             return .yellow // yellow — neutral
         } else {
-            return Color(hex: "#FF3B30") // red — low energy
+            return Color(hex: "#FFB34D") // soft amber — below goal (no-shame)
         }
     }
 

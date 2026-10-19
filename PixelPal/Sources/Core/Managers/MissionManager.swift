@@ -8,24 +8,23 @@ class MissionManager: ObservableObject {
 
     private let persistence = PersistenceManager.shared
     private let dailyGoal = 7500
+    /// Last average used for generation, reused when missions roll over at midnight.
+    private var lastWeeklyAverage = 3000
 
     private var todayString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
+        DailyGoalState.dayKey(for: Date())
     }
 
+    /// ISO week key (Monday start), independent of the user's locale.
     private var weekString: String {
-        let calendar = Calendar.current
-        let year = calendar.component(.yearForWeekOfYear, from: Date())
-        let week = calendar.component(.weekOfYear, from: Date())
-        return "\(year)-W\(String(format: "%02d", week))"
+        WeeklyChallengeProgress.weekKey(for: Date())
     }
 
     // MARK: - Public API
 
     /// Loads existing missions for today or generates new ones. Also loads weekly challenge for premium.
     func loadOrGenerateMissions(weeklyAverage: Int) {
+        lastWeeklyAverage = weeklyAverage
         loadOrGenerateWeeklyChallenge(weeklyAverage: weeklyAverage)
         let isPremium = PersistenceManager.shared.entitlements.isPremium
         let expectedCount = isPremium ? 5 : 3
@@ -34,8 +33,15 @@ class MissionManager: ObservableObject {
             if saved.missions.count == expectedCount {
                 missions = saved.missions
             } else {
-                // Premium status changed mid-day — regenerate with correct count
-                missions = generateMissions(weeklyAverage: max(weeklyAverage, 3000), isPremium: isPremium)
+                // Premium status changed mid-day — regenerate with correct count, keeping
+                // progress on missions that carry over (otherwise their coins pay out twice).
+                let previous = Dictionary(saved.missions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+                missions = generateMissions(weeklyAverage: max(weeklyAverage, 3000), isPremium: isPremium).map { fresh in
+                    guard let old = previous[fresh.id], old.type == fresh.type, old.target == fresh.target else { return fresh }
+                    var kept = fresh
+                    kept.progress = old.progress
+                    return kept
+                }
                 saveMissions()
             }
         } else {
@@ -45,59 +51,42 @@ class MissionManager: ObservableObject {
     }
 
     /// Updates mission progress based on current state.
-    func updateProgress(todaySteps: Int, currentStreak: Int, currentHour: Int) {
+    func updateProgress(todaySteps: Int, currentStreak: Int, currentHour: Int,
+                        stepsBeforeNoon: Int? = nil, stepsSinceFivePM: Int? = nil) {
+        // App stayed in memory past midnight (or the week rolled over): start fresh missions first,
+        // instead of applying today's steps to yesterday's list.
+        if let first = missions.first, first.dateString != todayString {
+            loadOrGenerateMissions(weeklyAverage: lastWeeklyAverage)
+        }
+        let input = MissionProgress.Input(
+            todaySteps: todaySteps,
+            stepsBeforeNoon: stepsBeforeNoon,
+            stepsSinceFivePM: stepsSinceFivePM,
+            currentHour: currentHour,
+            dailyGoal: dailyGoal
+        )
         var changed = false
-
-        for i in missions.indices {
-            guard !missions[i].isCompleted else { continue }
-
-            let newProgress: Int
-            switch missions[i].type {
-            case .stepTarget, .goalCrush:
-                newProgress = todaySteps
-            case .morningWalk:
-                newProgress = currentHour < 12 ? todaySteps : missions[i].progress
-            case .eveningPush:
-                // Track steps after 5pm (simplified: use total steps if after 5pm)
-                newProgress = currentHour >= 17 ? min(todaySteps, missions[i].target) : missions[i].progress
-            case .streakExtend:
-                newProgress = todaySteps >= dailyGoal ? 1 : 0
-            case .consistentDay:
-                // Simplified: count as progress if steps > 500 per active hour
-                let activeHours = max(1, currentHour - 7)
-                let avgPerHour = todaySteps / activeHours
-                newProgress = avgPerHour >= 500 ? min(activeHours, missions[i].target) : missions[i].progress
-            }
-
+        for i in missions.indices where !missions[i].isCompleted {
+            let newProgress = MissionProgress.evaluate(missions[i], input)
             if newProgress != missions[i].progress {
                 missions[i].progress = newProgress
                 changed = true
             }
         }
-
         if changed {
             saveMissions()
         }
     }
 
     /// Updates weekly challenge progress.
-    func updateWeeklyProgress(weeklySteps: Int, activeDaysThisWeek: Int, bestDayThisWeek: Int) {
+    func updateWeeklyProgress(days: [WeeklyChallengeProgress.DayTotal]) {
+        // Calendar week rolled over while the app stayed open: switch to this week's challenge.
+        if weeklyChallenge != nil, loadWeeklyChallenge()?.weekString != weekString {
+            loadOrGenerateWeeklyChallenge(weeklyAverage: lastWeeklyAverage)
+        }
         guard var challenge = weeklyChallenge, !challenge.isCompleted else { return }
 
-        let newProgress: Int
-        switch challenge.type {
-        case .totalSteps:
-            newProgress = weeklySteps
-        case .activeDays:
-            newProgress = activeDaysThisWeek
-        case .streakWeek:
-            newProgress = activeDaysThisWeek
-        case .bigDay:
-            newProgress = bestDayThisWeek >= 10_000 ? 1 : 0
-        case .consistentWeek:
-            newProgress = activeDaysThisWeek
-        }
-
+        let newProgress = WeeklyChallengeProgress.progress(for: challenge.type, days: days)
         if newProgress != challenge.progress {
             challenge.progress = newProgress
             weeklyChallenge = challenge
@@ -114,10 +103,10 @@ class MissionManager: ObservableObject {
 
     private func generateMissions(weeklyAverage: Int, isPremium: Bool) -> [DailyMission] {
         // Use date-based seed for deterministic generation
-        let seed = todayString.hashValue
-        var rng = SeededRandomNumberGenerator(seed: UInt64(bitPattern: Int64(seed)))
+        // String.hashValue is randomized per launch; use a stable hash so missions don't reshuffle.
+        var rng = SeededRandomNumberGenerator(string: todayString)
 
-        var types = MissionType.allCases.shuffled(using: &rng)
+        let types = MissionType.allCases.shuffled(using: &rng)
         let missionCount = isPremium ? 5 : 3
 
         var result: [DailyMission] = []
@@ -192,8 +181,7 @@ class MissionManager: ObservableObject {
     }
 
     private func generateWeeklyChallenge(weeklyAverage: Int) -> WeeklyChallenge {
-        let seed = weekString.hashValue
-        var rng = SeededRandomNumberGenerator(seed: UInt64(bitPattern: Int64(seed)))
+        var rng = SeededRandomNumberGenerator(string: weekString)
         let types = WeeklyChallengeType.allCases
         let type = types[Int.random(in: 0..<types.count, using: &rng)]
 
@@ -201,7 +189,8 @@ class MissionManager: ObservableObject {
 
         switch type {
         case .totalSteps:
-            let baseTarget = max(35_000, (weeklyAverage / 1000) * 1000)
+            // `weeklyAverage` is a daily average; scale it to a week.
+            let baseTarget = max(35_000, (weeklyAverage * 7 / 1000) * 1000)
             let scaled = baseTarget + Int.random(in: 0...10_000, using: &rng)
             let rounded = (scaled / 5000) * 5000
             title = "Marathon Week"
@@ -305,6 +294,16 @@ struct SeededRandomNumberGenerator: RandomNumberGenerator {
 
     init(seed: UInt64) {
         state = seed == 0 ? 1 : seed
+    }
+
+    /// Deterministic across launches (FNV-1a), unlike `String.hashValue`.
+    init(string: String) {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        self.init(seed: hash)
     }
 
     mutating func next() -> UInt64 {

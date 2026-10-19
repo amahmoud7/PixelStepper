@@ -26,8 +26,6 @@
     <true/>
     <key>NSHealthShareUsageDescription</key>
     <string>Pixel Stepper uses your step count to evolve your character and track your walking progress.</string>
-    <key>NSHealthUpdateUsageDescription</key>
-    <string>Pixel Stepper reads your step count from Health to power your character's evolution.</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
@@ -42,6 +40,8 @@
     <string>Pixel Stepper saves your share card to Photos so you can post it to Instagram Stories.</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>UIUserInterfaceStyle</key>
+    <string>Dark</string>
     <key>UILaunchScreen</key>
     <dict>
         <key>UIColorName</key>

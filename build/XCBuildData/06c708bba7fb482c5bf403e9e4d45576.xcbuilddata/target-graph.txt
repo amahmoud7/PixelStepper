@@ -1,4 +1,0 @@
-Target dependency graph (2 targets)
-Target 'PixelPal' in project 'PixelPal'
-➜ Explicit dependency on target 'PixelPalWidget' in project 'PixelPal'
-Target 'PixelPalWidget' in project 'PixelPal' (no dependencies)

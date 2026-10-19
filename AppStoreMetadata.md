@@ -4,7 +4,7 @@
 
 **App Name:** Pixel Stepper
 
-**Subtitle:** Walk, evolve & grow your companion
+**Subtitle:** Walk to evolve your tiny pet
 
 **Category:** Health & Fitness
 
@@ -21,7 +21,7 @@ Pixel Stepper turns your daily steps into a living pixel character. No guilt tri
 **How it works:**
 - Your character appears on your Lock Screen and Dynamic Island
 - Walk more, and they become more energetic
-- Complete daily missions to earn Step Coins
+- Complete daily missions
 - Track your streak and build consistency
 - Keep walking to unlock new evolution phases
 
@@ -31,14 +31,11 @@ Pixel Stepper turns your daily steps into a living pixel character. No guilt tri
 - 4 evolution phases to unlock through walking
 - 3 daily missions that refresh every day
 - Weekly challenges for extra rewards
-- Step Coins earned through real movement
 - Streak tracking with daily step goals
 - 30-day activity calendar and personal records
 - Share cards to show off your progress
 - Home Screen widgets (small, medium, large)
 - No ads, no spam notifications
-
-**Coming soon:** Wardrobe & Cosmetic Shop — spend your Step Coins on hats, backgrounds, and accessories to style your companion.
 
 Pixel Stepper isn't another step counter. It's a quiet companion that walks with you.
 
@@ -46,7 +43,9 @@ Pixel Stepper isn't another step counter. It's a quiet companion that walks with
 
 ## Keywords
 
-pixel,walking,steps,pedometer,companion,tamagotchi,pet,widget,lock screen,dynamic island,fitness,streak,missions,motivation,avatar
+walking,pedometer,step counter,pet,widget,lock screen,dynamic island,streak,missions,motivation
+
+(95/100 chars. Words already in the name/subtitle and the category name are indexed automatically, so they're omitted.)
 
 ---
 
@@ -54,7 +53,7 @@ pixel,walking,steps,pedometer,companion,tamagotchi,pet,widget,lock screen,dynami
 
 Massive update! Here's what's new:
 
-- Daily missions — complete 3 quests every day to earn Step Coins
+- Daily missions — 3 fresh goals every day
 - Weekly challenges for bonus rewards
 - Streak tracking — build your daily walking streak
 - 30-day activity calendar and personal records
@@ -63,13 +62,14 @@ Massive update! Here's what's new:
 - Improved widget with real-time step data
 - Phase progress tracking in Stats
 - Better HealthKit sync on app resume
-- Wardrobe & Cosmetic Shop coming soon!
+
+(Not shown for a first release; use from the first update onward.)
 
 ---
 
 ## Promotional Text
 
-Your daily steps bring a pixel companion to life — right on your Lock Screen. Complete missions, build streaks, and earn Step Coins!
+Your daily steps bring a pixel companion to life — right on your Lock Screen. Complete daily missions and build your streak.
 
 ---
 
@@ -105,7 +105,17 @@ Pixel Stepper accesses your step count solely to determine your character's ener
 Premium features are managed through Apple's App Store. We do not process payments directly.
 
 **Contact:**
-For questions, contact akrammahmoud@example.com
+For questions, open an issue at https://github.com/amahmoud7/PixelStepper/issues
+
+---
+
+## Privacy Policy URL
+
+https://github.com/amahmoud7/PixelStepper/blob/main/PRIVACY_POLICY.md
+
+## Terms of Use (EULA) URL
+
+https://www.apple.com/legal/internet-services/itunes/dev/stdeula/ (Apple standard EULA; also link it in the App Description or the EULA field in App Store Connect)
 
 ---
 
@@ -119,29 +129,26 @@ https://github.com/amahmoud7/PixelStepper/issues
 
 ### Monthly Premium ($2.99/month)
 **Display Name:** Monthly Premium
-**Description:** Unlock all evolution phases, 2x Step Coins, exclusive cosmetics, weekly challenges, streak freeze, and premium share cards. Cancel anytime.
+**Description:** All 4 phases, 5 daily missions & streak freeze
 
 ### Yearly Premium ($19.99/year)
 **Display Name:** Yearly Premium
-**Description:** Best value! Everything in Monthly Premium at over 35% savings. Unlock all phases, 2x coins, exclusive cosmetics, and more.
+**Description:** Best value: all premium features, billed yearly
 
 ---
 
 ## App Review Notes
 
 **HealthKit Usage:**
-Pixel Stepper reads step count data from HealthKit to determine the character's energy state (vital/neutral/low), track daily missions, calculate streaks, and award Step Coins. This is the core mechanic of the app - the character's appearance and progression reflect the user's daily movement. The HealthKit permission request uses the standard system dialog with neutral button text ("Continue"). If the user declines permission, the app remains fully functional but step data shows as 0, and a help banner provides guidance on enabling access through the Health app.
+Pixel Stepper reads step count data from HealthKit to determine the character's energy state (vital/neutral/low), track daily missions, and calculate streaks. This is the core mechanic of the app - the character's appearance and progression reflect the user's daily movement. The HealthKit permission request uses the standard system dialog with neutral button text ("Continue"). If the user declines permission, the app remains fully functional but step data shows as 0, and a help banner provides guidance on enabling access through the Health app.
 
 **Live Activity:**
 The app uses Live Activities to display the pixel character on the Lock Screen and Dynamic Island. The character animates between 2 frames locally using TimelineView. Live Activity content updates when step count changes significantly (not continuously).
 
-**Step Coins:**
-Step Coins are a virtual currency earned exclusively through walking activity (completing daily missions, maintaining streaks, hitting step milestones). No real money can purchase Step Coins directly — they are purely earned through physical activity. A Cosmetic Shop where coins can be spent on avatar customization is planned for a future update and currently shows a "Coming Soon" prompt.
-
 **Business Model:**
 1. **Who are the users?** Health-conscious individuals who want a fun, gamified walking motivation app. The app is suitable for all ages (4+).
 2. **Where can users purchase features?** Premium subscriptions are available exclusively through Apple's in-app purchase system (StoreKit 2). The paywall is accessible from the Home tab (crown icon) and the Profile tab. Subscriptions are auto-renewable.
-3. **What can premium users access?** Premium subscribers unlock: all 4 evolution phases (free users get phases 1-2), 2x Step Coin earnings, weekly challenges, streak freeze protection, and premium share card styles.
+3. **What can premium users access?** Premium subscribers unlock: all 4 evolution phases (free users get phases 1-2), 5 daily missions, weekly challenges, streak freeze protection, and premium share card styles.
 4. **What is available without purchase?** The core app is fully functional for free: step tracking, pixel character animation, Live Activity, Home Screen widget, phases 1-2, 3 daily missions, streak tracking, and standard share cards. Premium enhances the experience but is not required.
 
 **Demo Instructions:**
@@ -152,9 +159,8 @@ Step Coins are a virtual currency earned exclusively through walking activity (c
 5. Home tab: View avatar, streak info, daily missions
 6. Stats tab: View weekly history, personal records, phase progress
 7. Profile tab: Personal stats, Live Activity toggle, premium card
-8. Profile tab → Wardrobe shows "Coming Soon" alert (Cosmetic Shop in development)
-9. To test Premium: Profile tab → tap "Unlock Premium" or Home tab → crown icon
-10. Walk to see character energy change and missions progress
+8. To test Premium: Profile tab → tap "Unlock Premium" or Home tab → crown icon
+9. Walk to see character energy change and missions progress
 
 ---
 
@@ -178,14 +184,15 @@ No objectionable content.
 
 ## Checklist Before Submission
 
-- [ ] Save app icon (1024x1024) to AppIcon.appiconset/AppIcon.png
-- [ ] Take screenshots on iPhone 16 Pro (6.9")
-- [ ] Take screenshots on iPhone 8 Plus (5.5")
+- [x] Save app icon (1024x1024, no alpha) to AppIcon.appiconset/AppIcon.png
+- [ ] Screenshots: one set at 1206×2622 (iPhone 16 Pro / 17 Pro, 6.3"). Smaller sizes auto-scale; iPad not needed (iPhone-only). Lock Screen / Dynamic Island shot in the first 3. Flatten PNGs (no alpha).
+- [ ] Optional app preview: 886×1920, 15–30 s, H.264, ≤30 fps, hook in first 3 s
 - [ ] Update App Store Connect app listing with new description
-- [ ] Verify in-app purchases match pricing ($2.99/$19.99)
-- [ ] Upload privacy policy to web URL
+- [ ] Verify in-app purchases match pricing ($2.99/$19.99) and IAP descriptions ≤55 chars
+- [ ] Set Privacy Policy URL + privacy label "Data Not Collected"
+- [ ] Pricing & Availability: uncheck Apple silicon Mac and Apple Vision Pro
+- [ ] Run `xcodegen generate`, then tests, on the Mac
 - [ ] Test on physical device
 - [ ] Verify HealthKit permission flow works correctly
-- [ ] Verify Wardrobe shows "Coming Soon" alert
-- [ ] Archive and upload build
+- [ ] Archive with the latest Xcode (iOS 27 SDK required from April 2027) and upload
 - [ ] Submit for review

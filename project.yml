@@ -11,6 +11,7 @@ settings:
     SWIFT_VERSION: "5.9"
     MARKETING_VERSION: "2.1.0"
     CURRENT_PROJECT_VERSION: "2"
+    DEVELOPMENT_TEAM: 6AU8GNH8CT
 
 schemes:
   PixelPal:
@@ -23,6 +24,10 @@ schemes:
       config: Release
     archive:
       config: Release
+    test:
+      targets:
+        - PixelPalTests
+        - PixelPalUITests
 
 targets:
   PixelPal:
@@ -74,6 +79,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: PixelPalWidget/PixelPalWidget.entitlements
         ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: WidgetBackground
         SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1"
     entitlements:
       path: PixelPalWidget/PixelPalWidget.entitlements
       properties:
@@ -83,3 +89,30 @@ targets:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
           enabled: true
+
+  PixelPalTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PixelPalTests
+    dependencies:
+      - target: PixelPal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pixelpalfit.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+
+  PixelPalUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: PixelPalUITests
+    dependencies:
+      - target: PixelPal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pixelpalfit.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        TEST_TARGET_NAME: PixelPal

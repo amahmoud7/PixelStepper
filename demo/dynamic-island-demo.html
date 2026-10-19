@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Pace - Dynamic Island Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .demo-container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        /* iPhone Frame */
+        .iphone-frame {
+            width: 320px;
+            height: 680px;
+            background: #1c1c1e;
+            border-radius: 50px;
+            padding: 12px;
+            box-shadow:
+                0 0 0 3px #2c2c2e,
+                0 0 0 6px #1c1c1e,
+                0 20px 60px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .iphone-screen {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #000 0%, #111 100%);
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Dynamic Island */
+        .dynamic-island {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        .dynamic-island.compact {
+            width: 120px;
+            height: 36px;
+            border-radius: 20px;
+        }
+
+        .dynamic-island.expanded {
+            width: 280px;
+            height: 160px;
+            border-radius: 44px;
+        }
+
+        .dynamic-island.minimal {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+        }
+
+        /* Compact View Content */
+        .compact-content {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+        }
+
+        .compact-leading, .compact-trailing {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Expanded View Content */
+        .expanded-content {
+            display: none;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .expanded-overlay {
+            position: absolute;
+            top: 12px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            z-index: 10;
+        }
+
+        .overlay-top-left {
+            text-align: left;
+        }
+
+        .overlay-top-right {
+            text-align: right;
+        }
+
+        .expanded-sprite-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sprite-fullscreen {
+            width: 140px;
+            height: 140px;
+        }
+
+        .dynamic-island.expanded .compact-content {
+            display: none;
+        }
+
+        .dynamic-island.expanded .expanded-content {
+            display: flex;
+        }
+
+        /* Minimal View */
+        .minimal-content {
+            display: none;
+        }
+
+        .dynamic-island.minimal .compact-content {
+            display: none;
+        }
+
+        .dynamic-island.minimal .minimal-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Sprite Container */
+        .sprite {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .sprite-small {
+            width: 24px;
+            height: 24px;
+        }
+
+        .sprite-medium {
+            width: 40px;
+            height: 40px;
+        }
+
+        .sprite-large {
+            width: 80px;
+            height: 80px;
+        }
+
+        .sprite-xlarge {
+            width: 100px;
+            height: 100px;
+        }
+
+        .sprite-tiny {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Phase Dots */
+        .phase-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .phase-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #333;
+        }
+
+        .phase-dot.active {
+            background: #667eea;
+        }
+
+        .phase-dot.phase-1.active { background: #888; }
+        .phase-dot.phase-2.active { background: #4a9eff; }
+        .phase-dot.phase-3.active { background: #a855f7; }
+        .phase-dot.phase-4.active { background: #f97316; }
+
+        /* Step Counter */
+        .step-count {
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .step-label {
+            font-size: 10px;
+            color: #888;
+        }
+
+        /* Lock Screen Content */
+        .lock-screen {
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            right: 20px;
+        }
+
+        .time-display {
+            font-size: 72px;
+            font-weight: 200;
+            text-align: center;
+            letter-spacing: -2px;
+        }
+
+        .date-display {
+            font-size: 18px;
+            text-align: center;
+            color: #888;
+            margin-top: -5px;
+        }
+
+        /* Controls Panel */
+        .controls {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 24px;
+            width: 320px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #2c2c2e;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        .btn.active {
+            box-shadow: 0 0 0 2px #667eea;
+        }
+
+        /* State Selector */
+        .state-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .state-btn {
+            padding: 12px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .state-btn .sprite {
+            width: 32px;
+            height: 32px;
+        }
+
+        .state-btn span {
+            font-size: 10px;
+        }
+
+        /* Animation keyframes */
+        @keyframes breathe {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        .breathing {
+            animation: breathe 1.6s ease-in-out infinite;
+        }
+
+        .walking {
+            /* No CSS animation - sprite frames handle the movement */
+        }
+
+        /* Milestone celebration */
+        .milestone {
+            color: #4ade80;
+            font-weight: 700;
+            font-size: 16px;
+            animation: pulse 0.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+
+        /* Info Panel */
+        .info-panel {
+            margin-top: 20px;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .info-panel h4 {
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .info-panel ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .info-panel li {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .info-panel li:last-child {
+            border-bottom: none;
+        }
+
+        /* Size Comparison */
+        .size-comparison {
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .size-comparison h3 {
+            margin-bottom: 20px;
+            color: #888;
+        }
+
+        .size-row {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .size-item {
+            text-align: center;
+        }
+
+        .size-item .label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .mini-island {
+            background: #000;
+            margin: 0 auto;
+        }
+
+        .mini-island.compact-size {
+            width: 90px;
+            height: 27px;
+            border-radius: 14px;
+        }
+
+        .mini-island.expanded-size {
+            width: 210px;
+            height: 120px;
+            border-radius: 33px;
+        }
+
+        .mini-island.minimal-size {
+            width: 27px;
+            height: 27px;
+            border-radius: 50%;
+        }
+
+        /* Sprite Gallery */
+        .sprite-gallery {
+            margin-top: 40px;
+            padding: 24px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .sprite-gallery h3 {
+            margin-bottom: 20px;
+            color: #888;
+            text-align: center;
+        }
+
+        .gallery-row {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .gallery-item {
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            padding: 12px;
+            border-radius: 12px;
+        }
+
+        .gallery-item .sprite {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 8px;
+        }
+
+        .gallery-item .label {
+            font-size: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pixel Pace</h1>
+    <p class="subtitle">Dynamic Island Animation Demo - Using Actual Sprites</p>
+
+    <div class="demo-container">
+        <!-- iPhone Frame -->
+        <div class="iphone-frame">
+            <div class="iphone-screen">
+                <!-- Dynamic Island -->
+                <div class="dynamic-island compact" id="dynamicIsland" onclick="toggleExpanded()">
+                    <!-- Compact Content -->
+                    <div class="compact-content">
+                        <div class="compact-leading">
+                            <img id="compactSprite" class="sprite sprite-small" src="sprites/male_neutral_1.png" alt="sprite">
+                        </div>
+                        <div class="compact-trailing">
+                            <span class="step-count" id="compactSteps">4,523</span>
+                        </div>
+                    </div>
+
+                    <!-- Expanded Content -->
+                    <div class="expanded-content">
+                        <div class="expanded-overlay">
+                            <div class="overlay-top-left">
+                                <div class="step-count" id="expandedSteps">4,523</div>
+                                <div class="step-label">steps</div>
+                            </div>
+                            <div class="overlay-top-right">
+                                <div class="phase-dots" id="phaseDots">
+                                    <div class="phase-dot phase-1 active"></div>
+                                    <div class="phase-dot phase-2"></div>
+                                    <div class="phase-dot phase-3"></div>
+                                    <div class="phase-dot phase-4"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="expanded-sprite-container">
+                            <img id="expandedSpriteLarge" class="sprite sprite-fullscreen breathing" src="sprites/male_neutral_1.png" alt="sprite">
+                        </div>
+                        <img id="expandedSpriteSmall" style="display:none;" src="sprites/male_neutral_1.png" alt="sprite">
+                    </div>
+
+                    <!-- Minimal Content -->
+                    <div class="minimal-content">
+                        <img id="minimalSprite" class="sprite sprite-tiny" src="sprites/male_neutral_1.png" alt="sprite">
+                    </div>
+                </div>
+
+                <!-- Lock Screen -->
+                <div class="lock-screen">
+                    <div class="time-display" id="timeDisplay">9:41</div>
+                    <div class="date-display">Friday, January 31</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <div class="control-label">Island Size</div>
+                <div class="button-group">
+                    <button class="btn btn-secondary active" onclick="setIslandSize('compact')" id="btnCompact">Compact</button>
+                    <button class="btn btn-secondary" onclick="setIslandSize('expanded')" id="btnExpanded">Expanded</button>
+                    <button class="btn btn-secondary" onclick="setIslandSize('minimal')" id="btnMinimal">Minimal</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">Gender</div>
+                <div class="button-group">
+                    <button class="btn btn-primary active" onclick="setGender('male')" id="btnMale">Male</button>
+                    <button class="btn btn-secondary" onclick="setGender('female')" id="btnFemale">Female</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">State</div>
+                <div class="state-grid">
+                    <button class="btn btn-secondary state-btn" onclick="setState('vital')" id="btnVital">
+                        <img class="sprite" id="previewVital" src="sprites/male_vital_1.png" alt="vital">
+                        <span>Vital</span>
+                    </button>
+                    <button class="btn btn-secondary state-btn active" onclick="setState('neutral')" id="btnNeutral">
+                        <img class="sprite" id="previewNeutral" src="sprites/male_neutral_1.png" alt="neutral">
+                        <span>Neutral</span>
+                    </button>
+                    <button class="btn btn-secondary state-btn" onclick="setState('low')" id="btnLow">
+                        <img class="sprite" id="previewLow" src="sprites/male_low_1.png" alt="low">
+                        <span>Low</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">Animation</div>
+                <div class="button-group">
+                    <button class="btn btn-secondary active" onclick="setAnimation('idle')" id="btnIdle">Idle (Breathing)</button>
+                    <button class="btn btn-secondary" onclick="setAnimation('walking')" id="btnWalking">Walking (32 frames)</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">Phase</div>
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="setPhase(1)" id="btnPhase1" style="background:#888;">1</button>
+                    <button class="btn btn-secondary" onclick="setPhase(2)" id="btnPhase2" style="background:#4a9eff;">2</button>
+                    <button class="btn btn-secondary" onclick="setPhase(3)" id="btnPhase3" style="background:#a855f7;">3</button>
+                    <button class="btn btn-secondary" onclick="setPhase(4)" id="btnPhase4" style="background:#f97316;">4</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">Steps</div>
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="setSteps(1500)">1,500</button>
+                    <button class="btn btn-secondary" onclick="setSteps(4523)">4,523</button>
+                    <button class="btn btn-secondary" onclick="setSteps(7500)">7,500</button>
+                    <button class="btn btn-primary" onclick="setSteps(10000)">10k!</button>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h4>Current Configuration</h4>
+                <ul>
+                    <li>Size: <span id="infoSize">Compact</span></li>
+                    <li>Gender: <span id="infoGender">Male</span></li>
+                    <li>State: <span id="infoState">Neutral</span></li>
+                    <li>Animation: <span id="infoAnimation">Idle</span></li>
+                    <li>Phase: <span id="infoPhase">1</span></li>
+                    <li>Frame: <span id="infoFrame">1</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Size Comparison -->
+    <div class="size-comparison">
+        <h3>Dynamic Island Size Reference (iPhone 16 Pro Max)</h3>
+        <div class="size-row">
+            <div class="size-item">
+                <div class="mini-island compact-size"></div>
+                <div class="label">Compact: 120×36pt</div>
+            </div>
+            <div class="size-item">
+                <div class="mini-island expanded-size"></div>
+                <div class="label">Expanded: 280×160pt</div>
+            </div>
+            <div class="size-item">
+                <div class="mini-island minimal-size"></div>
+                <div class="label">Minimal: 36×36pt</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sprite Gallery -->
+    <div class="sprite-gallery">
+        <h3>All Available Sprites</h3>
+
+        <h4 style="color:#667eea; margin-bottom:12px; font-size:14px;">Male Idle States</h4>
+        <div class="gallery-row">
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/male_vital_1.png" alt="male vital 1">
+                <div class="label">vital_1</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/male_vital_2.png" alt="male vital 2">
+                <div class="label">vital_2</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/male_neutral_1.png" alt="male neutral 1">
+                <div class="label">neutral_1</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/male_neutral_2.png" alt="male neutral 2">
+                <div class="label">neutral_2</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/male_low_1.png" alt="male low 1">
+                <div class="label">low_1</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/male_low_2.png" alt="male low 2">
+                <div class="label">low_2</div>
+            </div>
+        </div>
+
+        <h4 style="color:#f472b6; margin-bottom:12px; font-size:14px;">Female Idle States</h4>
+        <div class="gallery-row">
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/female_vital_1.png" alt="female vital 1">
+                <div class="label">vital_1</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/female_vital_2.png" alt="female vital 2">
+                <div class="label">vital_2</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/female_neutral_1.png" alt="female neutral 1">
+                <div class="label">neutral_1</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/female_neutral_2.png" alt="female neutral 2">
+                <div class="label">neutral_2</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/female_low_1.png" alt="female low 1">
+                <div class="label">low_1</div>
+            </div>
+            <div class="gallery-item">
+                <img class="sprite" src="sprites/female_low_2.png" alt="female low 2">
+                <div class="label">low_2</div>
+            </div>
+        </div>
+
+        <h4 style="color:#4ade80; margin-bottom:12px; font-size:14px;">Walking Animation (32 frames each)</h4>
+        <div class="gallery-row" id="walkingGallery">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentGender = 'male';
+        let currentState = 'neutral';
+        let currentAnimation = 'idle';
+        let currentPhase = 1;
+        let currentSteps = 4523;
+        let currentSize = 'compact';
+        let idleFrame = 1;
+        let walkingFrame = 1;
+        const WALKING_FRAMES = 32;
+
+        // Preload all sprites
+        const spriteCache = {};
+
+        function preloadSprites() {
+            const genders = ['male', 'female'];
+            const states = ['vital', 'neutral', 'low'];
+
+            // Preload idle sprites
+            genders.forEach(gender => {
+                states.forEach(state => {
+                    [1, 2].forEach(frame => {
+                        const key = `${gender}_${state}_${frame}`;
+                        const img = new Image();
+                        img.src = `sprites/${key}.png`;
+                        spriteCache[key] = img;
+                    });
+                });
+
+                // Preload walking sprites
+                for (let i = 1; i <= WALKING_FRAMES; i++) {
+                    const key = `${gender}_walking_${i}`;
+                    const img = new Image();
+                    img.src = `sprites/${key}.png`;
+                    spriteCache[key] = img;
+                }
+            });
+        }
+
+        // Get sprite path
+        function getSpritePath() {
+            if (currentAnimation === 'walking') {
+                return `sprites/${currentGender}_walking_${walkingFrame}.png`;
+            }
+            return `sprites/${currentGender}_${currentState}_${idleFrame}.png`;
+        }
+
+        // Update all displays
+        function updateDisplay() {
+            const spritePath = getSpritePath();
+
+            // Update all sprite images
+            document.getElementById('compactSprite').src = spritePath;
+            document.getElementById('expandedSpriteSmall').src = spritePath;
+            document.getElementById('expandedSpriteLarge').src = spritePath;
+            document.getElementById('minimalSprite').src = spritePath;
+
+            // Update step counts
+            const formattedSteps = currentSteps.toLocaleString();
+            document.getElementById('compactSteps').textContent = formattedSteps;
+            document.getElementById('expandedSteps').textContent = formattedSteps;
+
+            // Update phase dots
+            const dots = document.querySelectorAll('.phase-dot');
+            dots.forEach((dot, i) => {
+                dot.classList.remove('active');
+                if (i < currentPhase) {
+                    dot.classList.add('active');
+                }
+            });
+
+            // Update info panel
+            document.getElementById('infoSize').textContent = currentSize.charAt(0).toUpperCase() + currentSize.slice(1);
+            document.getElementById('infoGender').textContent = currentGender.charAt(0).toUpperCase() + currentGender.slice(1);
+            document.getElementById('infoState').textContent = currentState.charAt(0).toUpperCase() + currentState.slice(1);
+            document.getElementById('infoAnimation').textContent = currentAnimation === 'walking' ? `Walking (${walkingFrame}/${WALKING_FRAMES})` : 'Idle';
+            document.getElementById('infoPhase').textContent = currentPhase;
+            document.getElementById('infoFrame').textContent = currentAnimation === 'walking' ? walkingFrame : idleFrame;
+
+            // Update preview sprites
+            document.getElementById('previewVital').src = `sprites/${currentGender}_vital_1.png`;
+            document.getElementById('previewNeutral').src = `sprites/${currentGender}_neutral_1.png`;
+            document.getElementById('previewLow').src = `sprites/${currentGender}_low_1.png`;
+        }
+
+        // Control functions
+        function setIslandSize(size) {
+            currentSize = size;
+            const island = document.getElementById('dynamicIsland');
+            island.className = 'dynamic-island ' + size;
+
+            document.querySelectorAll('#btnCompact, #btnExpanded, #btnMinimal').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById('btn' + size.charAt(0).toUpperCase() + size.slice(1)).classList.add('active');
+
+            updateDisplay();
+        }
+
+        function setGender(gender) {
+            currentGender = gender;
+            document.getElementById('btnMale').classList.toggle('active', gender === 'male');
+            document.getElementById('btnMale').classList.toggle('btn-primary', gender === 'male');
+            document.getElementById('btnMale').classList.toggle('btn-secondary', gender !== 'male');
+            document.getElementById('btnFemale').classList.toggle('active', gender === 'female');
+            document.getElementById('btnFemale').classList.toggle('btn-primary', gender === 'female');
+            document.getElementById('btnFemale').classList.toggle('btn-secondary', gender !== 'female');
+            updateDisplay();
+        }
+
+        function setState(state) {
+            currentState = state;
+            document.querySelectorAll('.state-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('btn' + state.charAt(0).toUpperCase() + state.slice(1)).classList.add('active');
+            updateDisplay();
+        }
+
+        function setAnimation(anim) {
+            currentAnimation = anim;
+            document.getElementById('btnIdle').classList.toggle('active', anim === 'idle');
+            document.getElementById('btnWalking').classList.toggle('active', anim === 'walking');
+
+            const largeSprite = document.getElementById('expandedSpriteLarge');
+            if (anim === 'walking') {
+                largeSprite.classList.remove('breathing');
+                largeSprite.classList.add('walking');
+            } else {
+                largeSprite.classList.remove('walking');
+                largeSprite.classList.add('breathing');
+            }
+            updateDisplay();
+        }
+
+        function setPhase(phase) {
+            currentPhase = phase;
+            updateDisplay();
+        }
+
+        function setSteps(steps) {
+            currentSteps = steps;
+            if (steps >= 10000) {
+                document.getElementById('compactSteps').innerHTML = '<span class="milestone">10k!</span>';
+                document.getElementById('expandedSteps').innerHTML = '<span class="milestone">10k!</span>';
+                setTimeout(() => {
+                    document.getElementById('compactSteps').textContent = steps.toLocaleString();
+                    document.getElementById('expandedSteps').textContent = steps.toLocaleString();
+                }, 3000);
+            }
+            updateDisplay();
+        }
+
+        function toggleExpanded() {
+            if (currentSize === 'compact') {
+                setIslandSize('expanded');
+            } else if (currentSize === 'expanded') {
+                setIslandSize('compact');
+            }
+        }
+
+        // Animation loop
+        function animateIdle() {
+            idleFrame = idleFrame === 1 ? 2 : 1;
+            if (currentAnimation === 'idle') {
+                updateDisplay();
+            }
+        }
+
+        function animateWalking() {
+            walkingFrame = (walkingFrame % WALKING_FRAMES) + 1;
+            if (currentAnimation === 'walking') {
+                updateDisplay();
+            }
+        }
+
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('timeDisplay').textContent = `${hours}:${minutes}`;
+        }
+
+        // Populate walking gallery
+        function populateWalkingGallery() {
+            const gallery = document.getElementById('walkingGallery');
+            // Show first 8 frames as sample
+            for (let i = 1; i <= 8; i++) {
+                const div = document.createElement('div');
+                div.className = 'gallery-item';
+                div.innerHTML = `
+                    <img class="sprite" src="sprites/male_walking_${i}.png" alt="walking ${i}">
+                    <div class="label">frame ${i}</div>
+                `;
+                gallery.appendChild(div);
+            }
+
+            // Add ellipsis
+            const ellipsis = document.createElement('div');
+            ellipsis.className = 'gallery-item';
+            ellipsis.innerHTML = `<div style="font-size:24px; padding:12px;">...</div><div class="label">+24 more</div>`;
+            gallery.appendChild(ellipsis);
+        }
+
+        // Initialize
+        preloadSprites();
+        updateDisplay();
+        updateTime();
+        populateWalkingGallery();
+
+        // Animation intervals
+        setInterval(animateWalking, 100); // Walking: 10 FPS (100ms per frame)
+        setInterval(animateIdle, 800);    // Idle: toggle every 0.8s
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>

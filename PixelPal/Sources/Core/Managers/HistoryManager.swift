@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Manages daily history tracking for 7-Day Memory UI and Phase Decay.
+/// Manages daily history tracking (week view, calendar, streaks).
 @MainActor
 class HistoryManager: ObservableObject {
     /// Shared instance.
@@ -27,12 +27,14 @@ class HistoryManager: ObservableObject {
     
     private init() {
         // Load history from persistence
-        self.history = persistence.dailyHistory ?? DailyHistory.createNew()
+        var loaded = persistence.dailyHistory ?? DailyHistory.createNew()
+        if loaded.normalizeDayKeys() {
+            persistence.saveDailyHistory(loaded)
+        }
+        self.history = loaded
         
         // Initialize today state
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        self.lastProcessedDay = formatter.string(from: Date())
+        self.lastProcessedDay = DailyGoalState.dayKey(for: Date())
         self.todayState = history.state(for: Date())
         
         // Setup day change monitoring
@@ -53,7 +55,6 @@ class HistoryManager: ObservableObject {
         persistence.saveDailyHistory(history)
         
         // Update shared data
-        SharedData.saveDailyHistory(history)
     }
     
     /// Records a complete day (for backfill scenarios).
@@ -66,7 +67,6 @@ class HistoryManager: ObservableObject {
         }
         
         persistence.saveDailyHistory(history)
-        SharedData.saveDailyHistory(history)
     }
     
     /// Refreshes history and handles day changes.
@@ -76,9 +76,7 @@ class HistoryManager: ObservableObject {
         let today = calendar.startOfDay(for: now)
         
         // Check if day changed
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let currentDayString = formatter.string(from: now)
+        let currentDayString = DailyGoalState.dayKey(for: now)
         
         if currentDayString != lastProcessedDay {
             // Day changed - ensure yesterday is finalized
@@ -96,7 +94,6 @@ class HistoryManager: ObservableObject {
         
         // Persist
         persistence.saveDailyHistory(history)
-        SharedData.saveDailyHistory(history)
     }
     
     /// Gets the last 7 days for week memory view.
@@ -110,40 +107,28 @@ class HistoryManager: ObservableObject {
     }
 
     /// Gets current streak (consecutive days with goal met).
-    /// Premium users get one streak freeze per week — one missed day is forgiven.
+    /// Premium users get one streak freeze per week — one missed day is forgiven. Read-only.
     var currentStreak: Int {
-        let isPremium = PersistenceManager.shared.entitlements.isPremium
-        guard isPremium else {
+        guard PersistenceManager.shared.entitlements.isPremium else {
             return history.countConsecutiveGoalsMet()
         }
-
-        let (streak, frozenDate) = history.countConsecutiveGoalsMetWithFreeze()
-
-        // If the freeze was actually used on a date, record it (once per week)
-        if let frozenDate = frozenDate {
-            let progress = PersistenceManager.shared.progressState
-            let needsRecording: Bool
-            if let lastUsed = progress.streakFreezeUsedDate {
-                let daysSince = Calendar.current.dateComponents([.day], from: lastUsed, to: Date()).day ?? 0
-                // Only allow one freeze per 7-day rolling window
-                needsRecording = daysSince >= 7
-            } else {
-                needsRecording = true
-            }
-
-            if needsRecording {
-                PersistenceManager.shared.updateProgress { state in
-                    state.streakFreezeUsedDate = frozenDate
-                }
-            } else {
-                // Freeze already used this week — fall back to regular streak
-                return history.countConsecutiveGoalsMet()
-            }
-        }
-
-        return streak
+        return StreakFreezePolicy.resolve(
+            history: history,
+            lastFreezeDate: PersistenceManager.shared.progressState.streakFreezeUsedDate
+        ).streak
     }
-    
+
+    /// Records a newly used streak freeze. Call before reading `currentStreak` during updates.
+    func applyStreakFreezeIfNeeded() {
+        guard PersistenceManager.shared.entitlements.isPremium else { return }
+        let result = StreakFreezePolicy.resolve(
+            history: history,
+            lastFreezeDate: PersistenceManager.shared.progressState.streakFreezeUsedDate
+        )
+        guard let frozenDate = result.freezeToRecord else { return }
+        PersistenceManager.shared.updateProgress { $0.streakFreezeUsedDate = frozenDate }
+    }
+
     /// Whether the streak freeze is available this week (premium only).
     var isStreakFreezeAvailable: Bool {
         guard PersistenceManager.shared.entitlements.isPremium else { return false }
@@ -157,38 +142,6 @@ class HistoryManager: ObservableObject {
         guard PersistenceManager.shared.entitlements.isPremium else { return false }
         let (_, frozenDate) = history.countConsecutiveGoalsMetWithFreeze()
         return frozenDate != nil
-    }
-
-    /// Backfills missing days with placeholder data.
-    /// Call when app has been killed for several days.
-    func backfillMissingDays() {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        
-        // Look back up to 30 days
-        for dayOffset in -30...(-1) {
-            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: today) else { continue }
-            
-            if history.state(for: date) == nil {
-                // Missing day - create placeholder
-                // For new users, treat as 0 steps (neutral)
-                // For existing users, we could estimate but 0 is safer
-                let placeholder = DailyGoalState.create(for: date, steps: 0, goal: dailyGoal)
-                history.recordDay(placeholder)
-            }
-        }
-        
-        persistence.saveDailyHistory(history)
-        SharedData.saveDailyHistory(history)
-    }
-    
-    /// Gets goal status for a specific date.
-    func goalStatus(for date: Date) -> GoalStatus {
-        guard let day = history.state(for: date) else {
-            return .unknown
-        }
-        
-        return day.isGoalMet ? .met : .missed
     }
     
     /// Reset history (for testing).
@@ -218,35 +171,17 @@ class HistoryManager: ObservableObject {
     private func handleDayChange() {
         finalizePreviousDay()
         refreshHistory()
-        
-        // Notify phase decay manager
-        PhaseDecayManager.shared.handleDayChange()
     }
     
     private func finalizePreviousDay() {
         // Ensure yesterday's data is preserved as-is
         // Steps will no longer update for yesterday
         let calendar = Calendar.current
-        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) else { return }
+        guard calendar.date(byAdding: .day, value: -1, to: Date()) != nil else { return }
         
         // Nothing special needed - steps won't be updated for past dates
         // Just persist current state
         persistence.saveDailyHistory(history)
-    }
-}
-
-/// Goal status for a specific day.
-enum GoalStatus: Equatable {
-    case met
-    case missed
-    case unknown
-    
-    var color: String {
-        switch self {
-        case .met: return "#34C759"
-        case .missed: return "#FF3B30"
-        case .unknown: return "#8E8E93"
-        }
     }
 }
 

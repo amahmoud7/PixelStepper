@@ -1,10 +1,10 @@
 import Foundation
 
-/// 30-day rolling history of daily goal states.
+/// Rolling history of daily goal states (long enough for year-long streaks).
 /// Used for 7-Day Memory UI and Phase Decay tracking.
 struct DailyHistory: Codable, Equatable {
     /// Maximum days to keep in history.
-    static let maxDays = 30
+    static let maxDays = 400
     
     /// Array of daily goal states (oldest to newest).
     var days: [DailyGoalState]
@@ -39,14 +39,42 @@ struct DailyHistory: Codable, Equatable {
         lastUpdated = Date()
     }
     
+    /// Repairs day keys written by older builds that keyed days with the user's calendar or
+    /// numbering system. Valid "yyyy-MM-dd" keys are the source of truth and are never touched,
+    /// so time-zone travel can't shift history. Returns true when anything changed.
+    mutating func normalizeDayKeys() -> Bool {
+        guard days.contains(where: { !Self.isValidDayKey($0.dateString) }) else { return false }
+        var byKey: [String: DailyGoalState] = [:]
+        for day in days {
+            let key = Self.isValidDayKey(day.dateString) ? day.dateString : DailyGoalState.dayKey(for: day.date)
+            let normalized = DailyGoalState(
+                dateString: key, date: day.date, steps: day.steps, goal: day.goal, isGoalMet: day.isGoalMet
+            )
+            if let existing = byKey[key], existing.steps >= normalized.steps { continue }
+            byKey[key] = normalized
+        }
+        days = byKey.values.sorted { $0.dateString < $1.dateString }
+        return true
+    }
+
+    /// ASCII "yyyy-MM-dd" with a plausible Gregorian year.
+    static func isValidDayKey(_ key: String) -> Bool {
+        let parts = key.split(separator: "-")
+        guard key.count == 10, parts.count == 3,
+              key.allSatisfy({ $0 == "-" || ("0"..."9").contains($0) }),
+              let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]) else { return false }
+        return (2000...2200).contains(year) && (1...12).contains(month) && (1...31).contains(day)
+    }
+
+    /// Day key → state, for loops that look up many days (streaks span up to `maxDays`).
+    private func indexByDay() -> [String: DailyGoalState] {
+        Dictionary(days.map { ($0.dateString, $0) }, uniquingKeysWith: { _, latest in latest })
+    }
+
     /// Gets the state for a specific date.
     func state(for date: Date) -> DailyGoalState? {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
-        let dateString = formatter.string(from: date)
-        
-        return days.first { $0.dateString == dateString }
+        let dateString = DailyGoalState.dayKey(for: date)
+        return days.last { $0.dateString == dateString }
     }
     
     /// Gets today's state (creates if missing).
@@ -64,10 +92,7 @@ struct DailyHistory: Codable, Equatable {
     /// Updates today's step count.
     mutating func updateToday(steps: Int) {
         let today = Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
-        let dateString = formatter.string(from: today)
+        let dateString = DailyGoalState.dayKey(for: today)
         
         if let index = days.firstIndex(where: { $0.dateString == dateString }) {
             days[index].updateSteps(steps)
@@ -105,6 +130,8 @@ struct DailyHistory: Codable, Equatable {
     
     /// Counts consecutive missed goals working backward from today.
     func countConsecutiveMisses() -> Int {
+        let index = indexByDay()
+        func state(for date: Date) -> DailyGoalState? { index[DailyGoalState.dayKey(for: date)] }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         var consecutiveMisses = 0
@@ -137,6 +164,8 @@ struct DailyHistory: Codable, Equatable {
 
     /// Counts consecutive days with goal met, ending at yesterday (today is still in progress).
     func countConsecutiveGoalsMet() -> Int {
+        let index = indexByDay()
+        func state(for date: Date) -> DailyGoalState? { index[DailyGoalState.dayKey(for: date)] }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         var streak = 0
@@ -163,6 +192,8 @@ struct DailyHistory: Codable, Equatable {
     /// Counts consecutive days with goal met, allowing one missed day to be "frozen."
     /// Returns the streak count and the date that was frozen (if any).
     func countConsecutiveGoalsMetWithFreeze() -> (streak: Int, frozenDate: Date?) {
+        let index = indexByDay()
+        func state(for date: Date) -> DailyGoalState? { index[DailyGoalState.dayKey(for: date)] }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         var streak = 0
@@ -197,11 +228,7 @@ struct DailyHistory: Codable, Equatable {
 extension DailyHistory {
     /// Data for a single day in the week view.
     struct DayViewData: Identifiable, Equatable {
-        var id: String {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            return formatter.string(from: date)
-        }
+        var id: Date { date }
         let date: Date
         let isToday: Bool
         let isGoalMet: Bool

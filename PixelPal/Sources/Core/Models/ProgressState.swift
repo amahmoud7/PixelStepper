@@ -50,6 +50,9 @@ struct ProgressState: Codable, Equatable {
     /// Date when streak freeze was last used (resets weekly).
     var streakFreezeUsedDate: Date?
 
+    /// One-off rewards already paid (prevents double payouts on refresh).
+    var rewardLedger = RewardLedger()
+
     /// Creates initial progress state for a new user.
     static func createNew() -> ProgressState {
         ProgressState(
@@ -107,6 +110,7 @@ struct ProgressState: Codable, Equatable {
         case hasSeenPaywall, lastPaywallDate, todaySteps
         case hasRequestedReview, currentStreak, longestStreak
         case bestDaySteps, bestDayDate, totalActiveDays, stepCoinBalance, streakFreezeUsedDate
+        case rewardLedger
     }
 
     init(from decoder: Decoder) throws {
@@ -125,6 +129,7 @@ struct ProgressState: Codable, Equatable {
         totalActiveDays = try container.decodeIfPresent(Int.self, forKey: .totalActiveDays) ?? 0
         stepCoinBalance = try container.decodeIfPresent(Int.self, forKey: .stepCoinBalance) ?? 0
         streakFreezeUsedDate = try container.decodeIfPresent(Date.self, forKey: .streakFreezeUsedDate)
+        rewardLedger = (try? container.decodeIfPresent(RewardLedger.self, forKey: .rewardLedger)) ?? RewardLedger()
     }
 
     /// Updates the phase based on total steps and premium status.

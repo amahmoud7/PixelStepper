@@ -204,52 +204,10 @@ struct CosmeticCatalog {
         ),
     ]
 
-    // MARK: - Skins (7)
+    // MARK: - Skins
 
-    static let skins: [CosmeticItem] = [
-        CosmeticItem(
-            id: "skin_luffy", name: "Straw Hat Pirate", category: .skin, rarity: .epic,
-            price: 1000, assetName: "skin_luffy",
-            requiresPremium: false, requiredPhase: 1, requiredStreak: 0, requiredTotalSteps: 0,
-            isLimited: false, availableFrom: nil, availableTo: nil
-        ),
-        CosmeticItem(
-            id: "skin_naruto", name: "Orange Ninja", category: .skin, rarity: .epic,
-            price: 1000, assetName: "skin_naruto",
-            requiresPremium: false, requiredPhase: 1, requiredStreak: 0, requiredTotalSteps: 0,
-            isLimited: false, availableFrom: nil, availableTo: nil
-        ),
-        CosmeticItem(
-            id: "skin_goku", name: "Saiyan Warrior", category: .skin, rarity: .epic,
-            price: 1000, assetName: "skin_goku",
-            requiresPremium: false, requiredPhase: 1, requiredStreak: 0, requiredTotalSteps: 0,
-            isLimited: false, availableFrom: nil, availableTo: nil
-        ),
-        CosmeticItem(
-            id: "skin_tanjiro", name: "Demon Hunter", category: .skin, rarity: .epic,
-            price: 1000, assetName: "skin_tanjiro",
-            requiresPremium: false, requiredPhase: 1, requiredStreak: 0, requiredTotalSteps: 0,
-            isLimited: false, availableFrom: nil, availableTo: nil
-        ),
-        CosmeticItem(
-            id: "skin_eren", name: "Survey Scout", category: .skin, rarity: .rare,
-            price: 800, assetName: "skin_eren",
-            requiresPremium: false, requiredPhase: 1, requiredStreak: 0, requiredTotalSteps: 0,
-            isLimited: false, availableFrom: nil, availableTo: nil
-        ),
-        CosmeticItem(
-            id: "skin_kakashi", name: "Copy Ninja", category: .skin, rarity: .legendary,
-            price: 2000, assetName: "skin_kakashi",
-            requiresPremium: false, requiredPhase: 1, requiredStreak: 0, requiredTotalSteps: 0,
-            isLimited: false, availableFrom: nil, availableTo: nil
-        ),
-        CosmeticItem(
-            id: "skin_gojo", name: "Cursed Sorcerer", category: .skin, rarity: .legendary,
-            price: 2000, assetName: "skin_gojo",
-            requiresPremium: false, requiredPhase: 1, requiredStreak: 0, requiredTotalSteps: 0,
-            isLimited: false, availableFrom: nil, availableTo: nil
-        ),
-    ]
+    /// Original full-character skins only; licensed characters violate App Review 5.2.
+    static let skins: [CosmeticItem] = []
 
     // MARK: - Lookups
 
@@ -302,7 +260,7 @@ struct CosmeticCatalog {
         let pool = all.filter { !$0.isLimited && $0.rarity != .common }
         guard pool.count >= 3 else { return Array(pool.prefix(3)) }
 
-        var shuffled = pool.shuffled(using: &rng)
+        let shuffled = pool.shuffled(using: &rng)
         // Ensure variety — pick from different categories if possible
         var result: [CosmeticItem] = []
         var usedCategories = Set<CosmeticCategory>()

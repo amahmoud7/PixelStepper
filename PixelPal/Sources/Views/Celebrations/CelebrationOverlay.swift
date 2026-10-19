@@ -3,32 +3,33 @@ import SwiftUI
 /// Spotlight Stage celebration — dark stage, golden spotlight, sparkles, "Milestone Unlocked" badge, gold CTA.
 struct CelebrationOverlay: View {
     let event: CelebrationEvent
+    /// Coins awarded for this event. Not rendered while coins are hidden (no shop yet); kept for the call site.
+    var coins: Int? = nil
+    /// Used to draw the evolved character for `.phaseEvolution`.
+    var gender: Gender = .male
     let onDismiss: () -> Void
     let onShare: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AccessibilityFocusState private var titleFocused: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 44
+    @ScaledMetric(relativeTo: .largeTitle) private var iconSize: CGFloat = 40
     @State private var isShowing = false
+    @State private var iconIn = false
+    @State private var isDismissing = false
     @State private var spotlightScale: CGFloat = 0.3
+    @State private var appearTask: Task<Void, Never>?
     @State private var autoDismissTask: Task<Void, Never>?
+    @State private var dismissTask: Task<Void, Never>?
 
     private var accentColor: Color {
         switch event {
-        case .streakMilestone: return Color(red: 1.0, green: 0.6, blue: 0.0)
-        case .phaseEvolution: return Color(red: 0.49, green: 0.36, blue: 0.99)
-        case .dailyGoalMet: return Color(red: 0.2, green: 0.78, blue: 0.35)
-        case .personalRecord: return Color(red: 1.0, green: 0.84, blue: 0.0)
-        case .stepMilestone: return Color(red: 0.0, green: 0.48, blue: 1.0)
-        }
-    }
-
-    private var coinReward: Int {
-        switch event {
-        case .streakMilestone(let days):
-            return days >= 100 ? 500 : days >= 30 ? 300 : 100
-        case .phaseEvolution: return 250
-        case .dailyGoalMet: return 25
-        case .personalRecord: return 150
-        case .stepMilestone(let cumulative):
-            return cumulative >= 100_000 ? 500 : cumulative >= 50_000 ? 300 : 100
+        case .streakMilestone: return Theme.amber
+        case .phaseEvolution: return Theme.purple
+        case .dailyGoalMet: return Theme.mint
+        case .personalRecord: return Theme.gold
+        case .stepMilestone: return Theme.blue
+        case .weeklyChallenge: return Theme.gold
         }
     }
 
@@ -37,195 +38,182 @@ struct CelebrationOverlay: View {
             // Pure black background
             Color(red: 0.02, green: 0.02, blue: 0.03)
                 .ignoresSafeArea()
+                .opacity(isShowing ? 1 : 0)
                 .onTapGesture { dismiss() }
+                .accessibilityHidden(true)
 
             // Spotlight glow layers
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [accentColor.opacity(0.12), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 200
+            Group {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [accentColor.opacity(0.12), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 200
+                        )
                     )
-                )
-                .frame(width: 400, height: 400)
-                .offset(y: -60)
-                .scaleEffect(spotlightScale)
+                    .frame(width: 400, height: 400)
+                    .offset(y: -60)
+                    .scaleEffect(reduceMotion ? 1 : spotlightScale)
 
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.08), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 140
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Theme.gold.opacity(0.08), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 140
+                        )
                     )
-                )
-                .frame(width: 280, height: 280)
-                .offset(y: -60)
-                .scaleEffect(spotlightScale)
+                    .frame(width: 280, height: 280)
+                    .offset(y: -60)
+                    .scaleEffect(reduceMotion ? 1 : spotlightScale)
+            }
+            .opacity(isShowing ? 1 : 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
-            // Sparkle particles
-            SparkleParticleView(accentColor: accentColor)
-                .ignoresSafeArea()
+            // Sparkle particles (skipped under Reduce Motion)
+            if !reduceMotion {
+                SparkleParticleView(accentColor: accentColor)
+                    .ignoresSafeArea()
+                    .opacity(isShowing ? 1 : 0)
+            }
 
             // Content
             VStack(spacing: 0) {
                 Spacer()
                     .frame(height: 80)
 
-                // "Milestone Unlocked" badge
-                Text("MILESTONE UNLOCKED")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Color(red: 1.0, green: 0.84, blue: 0.0))
-                    .tracking(1)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                    .opacity(isShowing ? 1 : 0)
-                    .offset(y: isShowing ? 0 : 10)
-
-                Spacer()
-                    .frame(height: 24)
-
-                // Achievement icon
+                // Achievement icon (or the evolved character)
                 achievementIcon
-                    .scaleEffect(isShowing ? 1.0 : 0.5)
-                    .opacity(isShowing ? 1.0 : 0)
+                    .scaleEffect(iconIn || reduceMotion ? 1.0 : 0.5)
+                    .opacity(iconIn ? 1.0 : 0)
+                    .accessibilityHidden(true)
 
                 Spacer()
-                    .frame(height: 24)
+                    .frame(height: Space.xl)
 
                 // Category label
                 Text(eventCategory)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textTertiary)
                     .tracking(3)
                     .textCase(.uppercase)
                     .opacity(isShowing ? 1 : 0)
 
                 // Title
                 Text(event.title)
-                    .font(.system(size: 44, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.system(size: titleSize, weight: .black, design: .rounded))
+                    .foregroundColor(Theme.textPrimary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, Space.xl)
                     .opacity(isShowing ? 1 : 0)
-                    .offset(y: isShowing ? 0 : 15)
+                    .offset(y: isShowing || reduceMotion ? 0 : 15)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($titleFocused)
 
                 Spacer()
-                    .frame(height: 12)
+                    .frame(height: Space.m)
 
                 // Subtitle
                 Text(event.subtitle)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
                     .lineSpacing(3)
                     .opacity(isShowing ? 1 : 0)
 
                 Spacer()
-                    .frame(height: 20)
-
-                // Coin reward pill
-                HStack(spacing: 6) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.yellow)
-                    Text("+\(coinReward) coins earned")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(red: 1.0, green: 0.84, blue: 0.0))
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule()
-                        .fill(Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.08))
-                        .overlay(
-                            Capsule()
-                                .stroke(Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.15), lineWidth: 1)
-                        )
-                )
-                .opacity(isShowing ? 1 : 0)
-
-                Spacer()
 
                 // Share CTA — gold gradient
-                Button(action: {
-                    let impact = UIImpactFeedbackGenerator(style: .medium)
-                    impact.impactOccurred()
-                    onShare()
-                }) {
+                Button {
+                    Haptics.tap()
+                    dismiss(then: onShare)
+                } label: {
                     Text("Share Achievement")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.black)
-                        .padding(.vertical, 14)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 1.0, green: 0.84, blue: 0.0),
-                                    Color(red: 1.0, green: 0.6, blue: 0.0)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(12)
-                        .shadow(color: Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.2), radius: 12, y: 4)
                 }
+                .buttonStyle(PPPrimaryButtonStyle(colors: [Theme.gold, Theme.amber], foreground: .black))
                 .padding(.horizontal, 40)
                 .opacity(isShowing ? 1 : 0)
 
                 // Dismiss hint
-                Button(action: dismiss) {
-                    Text("Tap to dismiss")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.2))
+                Button {
+                    Haptics.soft()
+                    dismiss()
+                } label: {
+                    Text("Done")
+                        .font(.ppRowTitle)
+                        .foregroundColor(Theme.textSecondary)
+                        .padding(.horizontal, Space.l)
+                        .minTapTarget()
                 }
-                .padding(.top, 14)
-                .padding(.bottom, 44)
+                .buttonStyle(.plain)
+                .padding(.top, Space.s)
+                .padding(.bottom, 36)
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
         }
         .onAppear {
-            let notification = UINotificationFeedbackGenerator()
-            notification.notificationOccurred(.success)
+            Haptics.prepare()
 
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+            withMotion(Motion.smooth, reduceMotion: reduceMotion) {
                 isShowing = true
             }
-            withAnimation(.easeOut(duration: 1.2)) {
+            withMotion(Motion.bouncy.delay(0.12), reduceMotion: reduceMotion) {
+                iconIn = true
+            }
+            withMotion(Motion.reveal, reduceMotion: reduceMotion) {
                 spotlightScale = 1.0
             }
 
-            autoDismissTask = Task {
+            appearTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                guard !Task.isCancelled else { return }
+                if case .phaseEvolution = event {
+                    Haptics.celebrate()
+                } else {
+                    Haptics.success()
+                }
+                titleFocused = true
+            }
+
+            // VoiceOver users need time to read the overlay; let them dismiss it themselves.
+            guard !UIAccessibility.isVoiceOverRunning else { return }
+            autoDismissTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
                 guard !Task.isCancelled else { return }
-                await MainActor.run { dismiss() }
+                dismiss()
             }
         }
         .onDisappear {
+            appearTask?.cancel()
             autoDismissTask?.cancel()
+            dismissTask?.cancel()
         }
     }
 
-    private func dismiss() {
+    /// Animates out once, then runs `action` (or `onDismiss`). Repeat calls are ignored.
+    private func dismiss(then action: (() -> Void)? = nil) {
+        guard !isDismissing else { return }
+        isDismissing = true
+        appearTask?.cancel()
         autoDismissTask?.cancel()
-        withAnimation(.easeOut(duration: 0.3)) {
+        withMotion(Motion.exit, reduceMotion: reduceMotion) {
             isShowing = false
+            iconIn = false
             spotlightScale = 0.3
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            onDismiss()
+        let completion = action ?? onDismiss
+        dismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            completion()
         }
     }
 
@@ -233,13 +221,24 @@ struct CelebrationOverlay: View {
 
     @ViewBuilder
     private var achievementIcon: some View {
+        if case .phaseEvolution(let phase) = event {
+            // Show the evolved character itself, with its phase aura.
+            AvatarView(state: .vital, gender: gender, phase: phase, size: 140)
+        } else {
+            symbolBadge
+        }
+    }
+
+    @ViewBuilder
+    private var symbolBadge: some View {
         let iconConfig: (name: String, color: Color) = {
             switch event {
-            case .streakMilestone: return ("flame.fill", .orange)
-            case .phaseEvolution: return ("sparkles", Color(red: 0.49, green: 0.36, blue: 0.99))
-            case .dailyGoalMet: return ("checkmark.circle.fill", Color(red: 0.2, green: 0.78, blue: 0.35))
-            case .personalRecord: return ("trophy.fill", Color(red: 1.0, green: 0.84, blue: 0.0))
-            case .stepMilestone: return ("figure.walk", Color(red: 0.0, green: 0.48, blue: 1.0))
+            case .streakMilestone: return ("flame.fill", Theme.amber)
+            case .phaseEvolution: return ("sparkles", Theme.purple)
+            case .dailyGoalMet: return ("checkmark.circle.fill", Theme.mint)
+            case .personalRecord: return ("trophy.fill", Theme.gold)
+            case .stepMilestone: return ("figure.walk", Theme.blue)
+            case .weeklyChallenge: return ("trophy.fill", Theme.gold)
             }
         }()
 
@@ -252,8 +251,9 @@ struct CelebrationOverlay: View {
                 .stroke(iconConfig.color.opacity(0.3), lineWidth: 2)
                 .frame(width: 96, height: 96)
 
+            // Scales with Dynamic Type, capped so it stays inside the 96pt badge.
             Image(systemName: iconConfig.name)
-                .font(.system(size: 40))
+                .font(.system(size: min(iconSize, 56)))
                 .foregroundColor(iconConfig.color)
                 .shadow(color: iconConfig.color.opacity(0.5), radius: 12)
         }
@@ -266,6 +266,7 @@ struct CelebrationOverlay: View {
         case .dailyGoalMet: return "Daily Goal"
         case .personalRecord: return "Personal Record"
         case .stepMilestone: return "Milestone"
+        case .weeklyChallenge: return "Weekly Challenge"
         }
     }
 }

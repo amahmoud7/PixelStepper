@@ -28,10 +28,16 @@ class StoreManager: ObservableObject {
     /// Error message if something went wrong.
     @Published var errorMessage: String?
 
+    /// The last purchase is waiting for approval (Ask to Buy / SCA). Access arrives via Transaction.updates.
+    @Published var purchaseIsPending = false
+
     /// Transaction listener task.
     private var updateListenerTask: Task<Void, Error>?
 
     private init() {
+        // Seed from the last verified state so premium UI doesn't flicker at launch;
+        // updatePurchasedProducts() re-derives it from StoreKit right after.
+        isPremium = PersistenceManager.shared.entitlements.isPremium
         // Start listening for transactions (lightweight, non-blocking)
         updateListenerTask = listenForTransactions()
         // Products loaded on demand via setup() to avoid blocking app launch
@@ -97,6 +103,7 @@ class StoreManager: ObservableObject {
     /// - Returns: Whether the purchase was successful.
     @discardableResult
     func purchase(_ product: Product) async -> Bool {
+        purchaseIsPending = false
         do {
             let result = try await product.purchase()
 
@@ -111,7 +118,8 @@ class StoreManager: ObservableObject {
                 return false
 
             case .pending:
-                // Transaction requires approval (e.g., Ask to Buy)
+                // Requires approval (e.g. Ask to Buy); the paywall tells the user it's waiting.
+                purchaseIsPending = true
                 return false
 
             @unknown default:
@@ -147,6 +155,10 @@ class StoreManager: ObservableObject {
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
+
+                // Refunded/revoked transactions don't grant access. (Expired ones are already
+                // excluded by currentEntitlements, which keeps billing-grace-period subscriptions.)
+                guard transaction.revocationDate == nil else { continue }
 
                 // Check if this is one of our subscription products
                 if ProductID(rawValue: transaction.productID) != nil {

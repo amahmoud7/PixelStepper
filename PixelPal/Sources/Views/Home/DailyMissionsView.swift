@@ -1,169 +1,241 @@
 import SwiftUI
 
-/// RPG-style Quest Board with left-border color coding, strikethrough completed, premium quests visible.
+/// Daily missions list with left-border color coding and strikethrough completed; one Premium footer for free users.
 struct DailyMissionsView: View {
     @EnvironmentObject var appState: AppStateManager
+    @State private var lastCompleted: Int?
 
-    private var coinBalance: Int {
-        PersistenceManager.shared.progressState.stepCoinBalance
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            // Coins are hidden until the shop ships; balances still accrue.
+            SectionHeader("Daily missions")
+
+            // Mission rows
+            ForEach(appState.missionManager.missions) { mission in
+                MissionRow(mission: mission)
+            }
+
+            // Weekly challenge (premium only)
+            if let challenge = appState.missionManager.weeklyChallenge {
+                WeeklyChallengeRow(challenge: challenge)
+            }
+
+            // Free users: one quiet upsell instead of several locked cards
+            if !appState.storeManager.isPremium {
+                premiumFooter
+            }
+        }
+        .onAppear {
+            lastCompleted = appState.missionManager.completedCount
+        }
+        // One reward tap per newly completed mission; nothing on appear.
+        .onChange(of: appState.missionManager.completedCount) { count in
+            if let last = lastCompleted, count > last {
+                Haptics.reward()
+            }
+            lastCompleted = count
+        }
     }
 
-    private var allMissionsCompleted: Bool {
-        appState.missionManager.completedCount == appState.missionManager.missions.count
+    private func showPaywall() {
+        Haptics.tap()
+        appState.showPaywall = true
+    }
+
+    // MARK: - Premium Footer
+
+    private var premiumFooter: some View {
+        Button(action: showPaywall) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.body)
+                    .foregroundColor(Theme.purpleText)
+                    .accessibilityHidden(true)
+
+                Text("2 more missions + weekly challenge with Premium")
+                    .font(.ppRowTitle)
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: Space.s)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(Theme.purpleText)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, Space.m)
+            .ppCard(padding: 0, radius: Radius.row, tint: Theme.purple)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PPPressableStyle())
+        .accessibilityHint("Opens Premium")
+    }
+}
+
+// MARK: - Section Header
+
+/// Home section title: sentence case, sits outside cards, optional trailing accessory.
+private struct SectionHeader<Accessory: View>: View {
+    let title: String
+    let accessory: Accessory
+
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Header: Quest Board + coin balance
-            HStack {
-                Text("Quest Board")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+        HStack(alignment: .center, spacing: Space.s) {
+            Text(title)
+                .font(.ppSection)
+                .foregroundColor(Theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
-                Spacer()
+            Spacer(minLength: Space.s)
 
-                HStack(spacing: 4) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.yellow)
-                    Text("\(coinBalance)")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(red: 1.0, green: 0.84, blue: 0.0))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.1))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.2), lineWidth: 1)
-                        )
-                )
-            }
-
-            // Quest rows
-            ForEach(appState.missionManager.missions) { mission in
-                questRow(mission)
-            }
-
-            // Weekly challenge (premium only) or locked placeholder
-            if let challenge = appState.missionManager.weeklyChallenge {
-                weeklyRow(challenge)
-            } else if !appState.storeManager.isPremium {
-                lockedWeeklyChallengeRow
-            }
-
-            // Premium quests or post-completion upsell
-            if !appState.storeManager.isPremium {
-                if allMissionsCompleted {
-                    postCompletionBanner
-                } else {
-                    premiumQuestsSection
-                }
-            }
+            accessory
         }
     }
+}
 
-    // MARK: - Weekly Challenge Row
+extension SectionHeader where Accessory == EmptyView {
+    init(_ title: String) {
+        self.init(title) { EmptyView() }
+    }
+}
 
-    @ViewBuilder
-    private func weeklyRow(_ challenge: WeeklyChallenge) -> some View {
-        let gold = Color(red: 1.0, green: 0.84, blue: 0.0)
+// MARK: - Mission Row
 
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 6) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(gold)
-                Text("WEEKLY CHALLENGE")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(gold.opacity(0.8))
-                    .tracking(1)
-                Spacer()
-                Text(daysLeftText)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+private struct MissionRow: View {
+    let mission: DailyMission
+
+    /// Mission accent; streak missions use amber rather than red (no-shame palette).
+    private var color: Color {
+        mission.type == .streakExtend ? Theme.amber : Color(hex: mission.type.color)
+    }
+
+    private var accessibilityText: String {
+        if mission.isCompleted {
+            return mission.title
+        }
+        return "\(mission.title), \(mission.progress.formatted()) of \(mission.target.formatted())"
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Left color border
+            Rectangle()
+                .fill(mission.isCompleted ? Theme.mint : color)
+                .frame(width: 3)
 
             HStack(spacing: 10) {
-                // Icon
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(gold.opacity(challenge.isCompleted ? 0.2 : 0.1))
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Image(systemName: challenge.isCompleted ? "checkmark" : challenge.type.icon)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(challenge.isCompleted ? Color(red: 0.2, green: 0.78, blue: 0.35) : gold)
-                    )
+                statusIcon
+                    .frame(width: 22, height: 22)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(challenge.title)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(challenge.isCompleted ? .white.opacity(0.5) : .white)
-                        .strikethrough(challenge.isCompleted, color: .white.opacity(0.3))
+                // Content
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(mission.title)
+                        .font(.ppRowTitle)
+                        .foregroundColor(mission.isCompleted ? Theme.textTertiary : Theme.textPrimary)
+                        .strikethrough(mission.isCompleted, color: Theme.textTertiary)
 
-                    Text(challenge.description)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-
-                    if !challenge.isCompleted {
-                        Text("\(challenge.progress.formatted()) / \(challenge.target.formatted())")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white.opacity(0.3))
+                    if !mission.isCompleted {
+                        Text("\(mission.progress.formatted()) / \(mission.target.formatted())")
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.textTertiary)
+                            .numericRoll(value: mission.progress)
                     }
                 }
 
                 Spacer()
-
-                Text("\(challenge.coinReward)")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(gold)
-                + Text(" \u{1FA99}")
-                    .font(.system(size: 10))
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
+            .padding(.leading, 13)
+            .padding(.trailing, 14)
+            .padding(.vertical, mission.isCompleted ? 12 : 10)
         }
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [gold.opacity(0.06), gold.opacity(0.02)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(gold.opacity(0.15), lineWidth: 1)
-                )
+            mission.isCompleted
+                ? Theme.mint.opacity(0.06)
+                : Color.white.opacity(mission.progress > 0 ? 0.03 : 0.02)
         )
+        .clipShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
         .overlay {
-            if !challenge.isCompleted && challenge.progress > 0 {
+            // Progress bar for in-progress missions
+            if !mission.isCompleted && mission.progress > 0 {
                 GeometryReader { geo in
                     VStack {
                         Spacer()
-                        RoundedRectangle(cornerRadius: 2)
+                        Capsule()
                             .fill(Color.white.opacity(0.06))
-                            .frame(height: 3)
+                            .frame(height: 4)
                             .overlay(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(gold)
-                                    .frame(width: geo.size.width * challenge.progressFraction)
-                                    .shadow(color: gold.opacity(0.4), radius: 3)
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [color, color.opacity(0.7)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: max(0, geo.size.width - 35) * mission.progressFraction)
+                                    .shadow(color: color.opacity(0.4), radius: 3)
                             }
-                            .padding(.horizontal, 14)
+                            .padding(.leading, 35)
                     }
-                    .padding(.bottom, 2)
                 }
+                .accessibilityHidden(true)
             }
         }
+        .motion(Motion.snappy, value: mission.isCompleted)
+        .motion(Motion.number, value: mission.progress)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityValue(mission.isCompleted ? "Completed" : "")
     }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        if mission.isCompleted {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Theme.mint)
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                )
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+        } else if mission.progress > 0 {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color.opacity(0.2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(color, lineWidth: 1.5)
+                )
+                .overlay(
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(color)
+                )
+                .transition(.opacity)
+        } else {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                )
+                .transition(.opacity)
+        }
+    }
+}
+
+// MARK: - Weekly Challenge Row
+
+private struct WeeklyChallengeRow: View {
+    let challenge: WeeklyChallenge
 
     private var daysLeftText: String {
         let calendar = Calendar.current
@@ -173,246 +245,107 @@ struct DailyMissionsView: View {
         return daysLeft == 0 ? "Ends today" : "\(daysLeft)d left"
     }
 
-    // MARK: - Quest Row
+    private var accessibilityText: String {
+        var parts = ["Weekly challenge", challenge.title, challenge.description]
+        if !challenge.isCompleted {
+            parts.append("\(challenge.progress.formatted()) of \(challenge.target.formatted())")
+        }
+        parts.append(daysLeftText)
+        return parts.joined(separator: ", ")
+    }
 
-    @ViewBuilder
-    private func questRow(_ mission: DailyMission) -> some View {
-        let color = Color(hex: mission.type.color)
-
-        HStack(spacing: 0) {
-            // Left color border
-            RoundedRectangle(cornerRadius: 2)
-                .fill(mission.isCompleted ? Color(red: 0.2, green: 0.78, blue: 0.35) : color)
-                .frame(width: 3)
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 6) {
+                Image(systemName: "crown.fill")
+                    .font(.caption2)
+                    .foregroundColor(Theme.gold)
+                Text("WEEKLY CHALLENGE")
+                    .font(.ppOverline)
+                    .tracking(1)
+                    .foregroundColor(Theme.gold)
+                Spacer()
+                Text(daysLeftText)
+                    .font(.ppMicro)
+                    .foregroundColor(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
 
             HStack(spacing: 10) {
-                // Status icon
-                if mission.isCompleted {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(red: 0.2, green: 0.78, blue: 0.35))
-                        .frame(width: 22, height: 22)
-                        .overlay(
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white)
-                        )
-                } else if mission.progress > 0 {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(color.opacity(0.2))
-                        .frame(width: 22, height: 22)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(color, lineWidth: 1.5)
-                        )
-                        .overlay(
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 8))
-                                .foregroundColor(color)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.05))
-                        .frame(width: 22, height: 22)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
-                        )
-                }
+                // Icon
+                RoundedRectangle(cornerRadius: Radius.chip, style: .continuous)
+                    .fill(Theme.gold.opacity(challenge.isCompleted ? 0.2 : 0.1))
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        ZStack {
+                            if challenge.isCompleted {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(Theme.mint)
+                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            } else {
+                                Image(systemName: challenge.type.icon)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(Theme.gold)
+                                    .transition(.opacity)
+                            }
+                        }
+                    )
 
-                // Content
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(mission.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(mission.isCompleted ? .white.opacity(0.5) : .white)
-                        .strikethrough(mission.isCompleted, color: .white.opacity(0.3))
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(challenge.title)
+                        .font(.ppRowTitle)
+                        .foregroundColor(challenge.isCompleted ? Theme.textTertiary : Theme.textPrimary)
+                        .strikethrough(challenge.isCompleted, color: Theme.textTertiary)
 
-                    if !mission.isCompleted {
-                        Text("\(mission.progress.formatted()) / \(mission.target.formatted())")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white.opacity(0.4))
+                    Text(challenge.description)
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textTertiary)
+
+                    if !challenge.isCompleted {
+                        Text("\(challenge.progress.formatted()) / \(challenge.target.formatted())")
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.textTertiary)
                     }
                 }
 
                 Spacer()
-
-                // Coin reward
-                Text(mission.isCompleted ? "+\(mission.coinReward)" : "\(mission.coinReward)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(mission.isCompleted
-                        ? Color(red: 1.0, green: 0.84, blue: 0.0)
-                        : Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.4))
-                + Text(" 🪙")
-                    .font(.system(size: 10))
             }
-            .padding(.leading, 13)
-            .padding(.trailing, 14)
-            .padding(.vertical, mission.isCompleted ? 12 : 10)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 10)
         }
-        .background(
-            mission.isCompleted
-                ? Color(red: 0.2, green: 0.78, blue: 0.35).opacity(0.06)
-                : Color.white.opacity(mission.progress > 0 ? 0.03 : 0.02)
-        )
-        .clipShape(
-            .rect(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 12, topTrailingRadius: 12)
-        )
+        .ppCard(padding: 0, radius: Radius.row, tint: Theme.gold)
         .overlay {
-            // Progress bar for in-progress quests
-            if !mission.isCompleted && mission.progress > 0 {
+            if !challenge.isCompleted && challenge.progress > 0 {
                 GeometryReader { geo in
                     VStack {
                         Spacer()
-                        RoundedRectangle(cornerRadius: 2)
+                        Capsule()
                             .fill(Color.white.opacity(0.06))
-                            .frame(height: 4)
+                            .frame(height: 3)
                             .overlay(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [color, color.opacity(0.7)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(width: geo.size.width * mission.progressFraction)
-                                    .shadow(color: color.opacity(0.4), radius: 3)
+                                Capsule()
+                                    .fill(Theme.gold)
+                                    .frame(width: max(0, geo.size.width - 28) * challenge.progressFraction)
+                                    .shadow(color: Theme.gold.opacity(0.4), radius: 3)
                             }
-                            .padding(.leading, 35)
+                            .padding(.horizontal, 14)
                     }
+                    .padding(.bottom, 2)
                 }
+                .accessibilityHidden(true)
             }
         }
-    }
-
-    // MARK: - Premium Quests
-
-    private var premiumQuestsSection: some View {
-        Button(action: { appState.showPaywall = true }) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Dashed divider
-                Rectangle()
-                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                    .foregroundColor(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.2))
-                    .frame(height: 1)
-
-                Text("PREMIUM QUESTS")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.7))
-                    .tracking(1)
-
-                // Locked quest rows
-                lockedQuestRow(title: "Evening Push — 2,000 steps after 5pm")
-                lockedQuestRow(title: "Stay Active — 500+ steps/hr for 4 hrs")
-            }
-            .opacity(0.5)
+        .motion(Motion.snappy, value: challenge.isCompleted)
+        .motion(Motion.number, value: challenge.progress)
+        .onChange(of: challenge.isCompleted) { done in
+            if done { Haptics.reward() }
         }
-    }
-
-    // MARK: - Locked Weekly Challenge
-
-    private var lockedWeeklyChallengeRow: some View {
-        let gold = Color(red: 1.0, green: 0.84, blue: 0.0)
-
-        return Button(action: { appState.showPaywall = true }) {
-            HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 9))
-                        .foregroundColor(gold.opacity(0.5))
-                    Text("WEEKLY CHALLENGE")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(gold.opacity(0.4))
-                        .tracking(1)
-                }
-
-                Spacer()
-
-                HStack(spacing: 4) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9))
-                        .foregroundColor(gold.opacity(0.4))
-                    Text("Unlock with Premium")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(gold.opacity(0.4))
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(gold.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(gold.opacity(0.1), lineWidth: 1)
-                    )
-            )
-            .opacity(0.6)
-        }
-    }
-
-    // MARK: - Post-Completion Banner
-
-    private var postCompletionBanner: some View {
-        let purple = Color(red: 0.49, green: 0.36, blue: 0.99)
-
-        return Button(action: { appState.showPaywall = true }) {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 14))
-                    .foregroundColor(purple)
-
-                Text("Unlock 2 bonus missions")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(purple.opacity(0.6))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(purple.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(purple.opacity(0.2), lineWidth: 1)
-                    )
-            )
-        }
-    }
-
-    private func lockedQuestRow(title: String) -> some View {
-        HStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.15))
-                .frame(width: 3)
-
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.1))
-                    .frame(width: 22, height: 22)
-                    .overlay(
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.5))
-                    )
-
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
-
-                Spacer()
-            }
-            .padding(.leading, 13)
-            .padding(.trailing, 14)
-            .padding(.vertical, 10)
-        }
-        .background(Color.white.opacity(0.02))
-        .clipShape(
-            .rect(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 12, topTrailingRadius: 12)
-        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityValue(challenge.isCompleted ? "Completed" : "")
     }
 }

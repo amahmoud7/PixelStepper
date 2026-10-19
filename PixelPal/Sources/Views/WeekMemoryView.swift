@@ -5,10 +5,10 @@ import SwiftUI
 ///
 /// Design:
 /// - 24pt circles with 12pt spacing
-/// - Green (#34C759) = met goal
-/// - Red 70% opacity = missed goal  
-/// - Blue pulse = today
-/// - 0.3s fill animation on state change
+/// - Theme.goalMet = met goal
+/// - Theme.belowGoal = below goal (soft amber, never red)
+/// - Theme.today pulse = today
+/// - Spring fill animation on state change
 struct WeekMemoryView: View {
     /// Day view data from HistoryManager.
     let days: [DailyHistory.DayViewData]
@@ -22,34 +22,39 @@ struct WeekMemoryView: View {
     /// Pulse animation state for today.
     @State private var isPulsing: Bool = false
 
+    /// Day key of the last "today" pulse, so it plays once per day rather than on every tab switch.
+    @AppStorage("lastTodayPulseDay") private var lastTodayPulseDay: String = ""
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        HStack(spacing: 12) {
-            ForEach(Array(days.enumerated()), id: \.offset) { index, day in
+        HStack(spacing: Space.m) {
+            ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                let isShown = reduceMotion || (animatedDays.indices.contains(index) && animatedDays[index])
                 DayBubble(
                     day: day,
                     isPulsing: day.isToday && (justMetGoal || isPulsing)
                 )
-                .scaleEffect(animatedDays.indices.contains(index) && animatedDays[index] ? 1.0 : 0.1)
-                .opacity(animatedDays.indices.contains(index) && animatedDays[index] ? 1.0 : 0.0)
-                .animation(
-                    .easeOut(duration: 0.3).delay(Double(index) * 0.05),
+                .scaleEffect(isShown ? 1.0 : 0.1)
+                .opacity(isShown ? 1.0 : 0.0)
+                .motion(
+                    Motion.staggered(index, Motion.snappy),
                     value: animatedDays
                 )
             }
         }
         .onAppear {
-            // Initialize animation states
+            // Start pulse for today (at most once per day)
+            startPulseIfToday()
+
+            // Pop-in only on first appearance, not on every tab switch.
+            guard animatedDays.isEmpty else { return }
             animatedDays = Array(repeating: false, count: days.count)
 
-            // Trigger animations
+            // Trigger animations (the per-bubble .motion drives the spring)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation {
-                    animatedDays = Array(repeating: true, count: days.count)
-                }
+                animatedDays = Array(repeating: true, count: days.count)
             }
-
-            // Start pulse for today
-            startPulseIfToday()
         }
         .onChange(of: days) { _ in
             startPulseIfToday()
@@ -63,6 +68,9 @@ struct WeekMemoryView: View {
 
     private func startPulseIfToday() {
         guard let today = days.last, today.isToday else { return }
+        let key = DailyGoalState.dayKey(for: Date())
+        guard lastTodayPulseDay != key else { return }
+        lastTodayPulseDay = key
         triggerPulse()
     }
 
@@ -83,6 +91,11 @@ private struct DayBubble: View {
     /// Bubble size.
     private let bubbleSize: CGFloat = 24
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Drives the expanding ring; reset to false before each pulse so it animates from rest.
+    @State private var ring = false
+
     var body: some View {
         ZStack {
             // Background circle
@@ -90,17 +103,13 @@ private struct DayBubble: View {
                 .fill(backgroundColor)
                 .frame(width: bubbleSize, height: bubbleSize)
 
-            // Pulse overlay for today
-            if day.isToday && isPulsing {
+            // Pulse ring for today (kept in the tree so the animation has a start state)
+            if day.isToday {
                 Circle()
                     .stroke(bubbleColor, lineWidth: 2)
                     .frame(width: bubbleSize + 8, height: bubbleSize + 8)
-                    .scaleEffect(isPulsing ? 1.2 : 1.0)
-                    .opacity(isPulsing ? 0 : 1)
-                    .animation(
-                        .easeInOut(duration: 0.6).repeatCount(3, autoreverses: true),
-                        value: isPulsing
-                    )
+                    .scaleEffect(ring ? 1.25 : 1.0)
+                    .opacity(ring ? 0 : (isPulsing ? 1 : 0))
             }
 
             // Inner indicator dot for today
@@ -110,51 +119,66 @@ private struct DayBubble: View {
                     .frame(width: 6, height: 6)
             }
 
-            // Checkmark for goal met (past days)
+            // Checkmark for goal met (past days). Fixed size: the bubble is a fixed 24pt circle.
             if !day.isToday && day.isGoalMet && day.hasData {
                 Image(systemName: "checkmark")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
             }
         }
-        .overlay(
-            // Tooltip on hover/press (conceptual - could be expanded)
-            dayTooltip
-        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .onAppear {
+            if isPulsing { pulse() }
+        }
+        .onChange(of: isPulsing) { newValue in
+            if newValue { pulse() }
+        }
     }
 
-    @ViewBuilder
-    private var dayTooltip: some View {
-        // Empty for now - could add hover tooltip in future
-        EmptyView()
+    private func pulse() {
+        guard day.isToday, !reduceMotion else { return }
+        ring = false
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.6).repeatCount(3, autoreverses: false)) {
+                ring = true
+            }
+        }
+    }
+
+    private var accessibilityText: String {
+        let prefix = day.isToday ? "Today" : day.date.formatted(.dateTime.weekday(.wide))
+        guard day.hasData else { return "\(prefix), no data" }
+        let status = day.isGoalMet ? ", goal met" : (day.isToday ? "" : ", below goal")
+        return "\(prefix), \(day.steps.formatted()) steps\(status)"
     }
 
     private var backgroundColor: Color {
         if day.isToday {
-            // Today uses blue tint with goal status fill
+            // Today uses the today tint with goal status fill
             if day.isGoalMet {
-                return Color(hex: "#34C759") // Green
+                return Theme.goalMet
             } else {
-                return Color.blue.opacity(0.3)
+                return Theme.today.opacity(0.3)
             }
         } else {
             // Past days
             if !day.hasData {
                 // No data yet (future or missing)
-                return Color.gray.opacity(0.15)
+                return Theme.noData
             } else if day.isGoalMet {
-                return Color(hex: "#34C759") // Green for met
+                return Theme.goalMet
             } else {
-                return Color(hex: "#FF3B30").opacity(0.7) // Red 70% for missed
+                return Theme.belowGoal
             }
         }
     }
 
     private var bubbleColor: Color {
         if day.isGoalMet {
-            return Color(hex: "#34C759")
+            return Theme.goalMet
         } else {
-            return Color.blue
+            return Theme.today
         }
     }
 }
@@ -199,13 +223,13 @@ private struct MiniDayBubble: View {
 
     private var miniBackgroundColor: Color {
         if day.isToday {
-            return day.isGoalMet ? Color(hex: "#34C759") : Color.blue
+            return day.isGoalMet ? Theme.goalMet : Theme.today
         } else if !day.hasData {
-            return Color.gray.opacity(0.3)
+            return Theme.noData
         } else if day.isGoalMet {
-            return Color(hex: "#34C759")
+            return Theme.goalMet
         } else {
-            return Color(hex: "#FF3B30").opacity(0.7)
+            return Theme.belowGoal
         }
     }
 }
@@ -214,8 +238,11 @@ private struct MiniDayBubble: View {
 
 /// Full section view for ContentView with label.
 struct WeekMemorySection: View {
-    @StateObject private var historyManager = HistoryManager.shared
+    @ObservedObject private var historyManager = HistoryManager.shared
     @State private var justMetGoal: Bool = false
+
+    /// Day key of the last goal-met pulse, so the celebration ring plays once per day.
+    @AppStorage("lastGoalPulseDay") private var lastGoalPulseDay: String = ""
 
     var body: some View {
         VStack(spacing: 12) {
@@ -226,36 +253,14 @@ struct WeekMemorySection: View {
             )
 
             // Legend
-            HStack(spacing: 16) {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color(hex: "#34C759"))
-                        .frame(width: 8, height: 8)
-                    Text("Met")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color(hex: "#FF3B30").opacity(0.7))
-                        .frame(width: 8, height: 8)
-                    Text("Missed")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 8, height: 8)
-                    Text("Today")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
+            HStack(spacing: Space.l) {
+                legendItem(color: Theme.goalMet, label: "Met")
+                legendItem(color: Theme.belowGoal, label: "Below goal")
+                legendItem(color: Theme.today, label: "Today")
             }
+            .accessibilityElement(children: .combine)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, Space.m)
         .onAppear {
             checkGoalJustMet()
         }
@@ -264,13 +269,26 @@ struct WeekMemorySection: View {
         }
     }
 
+    private func legendItem(color: Color, label: String) -> some View {
+        HStack(spacing: Space.xs) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(label)
+                .font(.ppMicro)
+                .foregroundColor(Theme.textTertiary)
+        }
+    }
+
     private func checkGoalJustMet() {
-        if historyManager.todayState?.isGoalMet == true {
-            justMetGoal = true
-            // Reset after animation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                justMetGoal = false
-            }
+        guard historyManager.todayState?.isGoalMet == true else { return }
+        let key = DailyGoalState.dayKey(for: Date())
+        guard lastGoalPulseDay != key else { return }
+        lastGoalPulseDay = key
+        justMetGoal = true
+        // Reset after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            justMetGoal = false
         }
     }
 }

@@ -52,8 +52,9 @@ struct AnimatedImageEncoder {
         let allIDATChunks = allChunks.map { chunks in chunks.filter { $0.type == "IDAT" } }
         guard allIDATChunks.allSatisfy({ !$0.isEmpty }) else { return nil }
 
-        let width = ihdr.data.withUnsafeBytes { $0.load(fromByteOffset: 0, as: UInt32.self).bigEndian }
-        let height = ihdr.data.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt32.self).bigEndian }
+        guard ihdr.data.count >= 8 else { return nil }
+        let width = ihdr.data.uint32BE(at: 0)
+        let height = ihdr.data.uint32BE(at: 4)
 
         var result = Data()
 
@@ -116,9 +117,8 @@ struct AnimatedImageEncoder {
         var offset = 8 // Skip 8-byte PNG signature
 
         while offset + 12 <= pngData.count {
-            let length = pngData.withUnsafeBytes {
-                $0.load(fromByteOffset: offset, as: UInt32.self).bigEndian
-            }
+            // Byte-wise read: chunk offsets aren't 4-byte aligned, and an aligned load traps.
+            let length = pngData.uint32BE(at: offset)
 
             let typeEnd = offset + 8
             guard typeEnd <= pngData.count else { break }
@@ -208,6 +208,16 @@ struct AnimatedImageEncoder {
 // MARK: - Data Helpers
 
 private extension Data {
+    /// Big-endian UInt32 at a byte offset relative to `startIndex` (alignment-safe, slice-safe).
+    func uint32BE(at offset: Int) -> UInt32 {
+        let i = startIndex + offset
+        let b0 = UInt32(self[i]) << 24
+        let b1 = UInt32(self[i + 1]) << 16
+        let b2 = UInt32(self[i + 2]) << 8
+        let b3 = UInt32(self[i + 3])
+        return b0 | b1 | b2 | b3
+    }
+
     mutating func appendUInt32BE(_ value: UInt32) {
         var bigEndian = value.bigEndian
         append(Data(bytes: &bigEndian, count: 4))

@@ -1,0 +1,138 @@
+name: iOS Build & Test
+
+on:
+  # Branch pushes are covered by the pull_request run; only build main directly.
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "demo/**"
+      - "presentations/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Pick simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          devices = json.load(sys.stdin)['devices']
+          runtimes = sorted((k for k in devices if 'iOS' in k), reverse=True)
+          print(next(d['udid'] for r in runtimes for d in devices[r] if d['name'].startswith('iPhone')))
+          ")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project PixelStepper.xcodeproj \
+            -scheme PixelPal \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:PixelPalTests \
+            CODE_SIGNING_ALLOWED=NO \
+            > build.log 2>&1 && STATUS=0 || STATUS=$?
+          grep -E "error:|warning: .*deprecated|Test Case .* failed|XCTAssert|\*\* (BUILD|TEST) " build.log | sort -u | head -150
+          tail -5 build.log
+          exit $STATUS
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+  screenshots:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # Largest current iPhone, and the smallest supported screen.
+        device: [large, small]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Create simulator
+        id: sim
+        run: |
+          UDID=$(python3 - "${{ matrix.device }}" <<'PY'
+          import json, subprocess, sys
+          want = sys.argv[1]
+          run = lambda *a: subprocess.check_output(["xcrun", "simctl", *a], text=True)
+          runtimes = [r for r in json.loads(run("list", "runtimes", "-j"))["runtimes"]
+                      if r["platform"] == "iOS" and r["isAvailable"]]
+          runtime = sorted(runtimes, key=lambda r: [int(x) for x in r["version"].split(".")])[-1]
+          types = [t["identifier"] for t in runtime.get("supportedDeviceTypes", [])]
+          if want == "small":
+              prefs = ["iPhone-SE-3rd-generation", "iPhone-16e", "iPhone-13-mini"]
+          else:
+              prefs = ["iPhone-17-Pro-Max", "iPhone-16-Pro-Max", "iPhone-17-Pro", "iPhone-16-Pro"]
+          chosen = next((t for p in prefs for t in types if t.endswith(p)),
+                        next(t for t in types if "iPhone" in t))
+          udid = run("create", f"Shots-{want}", chosen, runtime["identifier"]).strip()
+          print(udid)
+          PY
+          )
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID"
+          # Clean status bar for consistent captures.
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+
+      - name: Capture screenshots
+        run: |
+          mkdir -p screenshots
+          TEST_RUNNER_SCREENSHOT_DIR="$PWD/screenshots" xcodebuild test \
+            -project PixelStepper.xcodeproj \
+            -scheme PixelPal \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:PixelPalUITests \
+            CODE_SIGNING_ALLOWED=NO \
+            > ui.log 2>&1 && STATUS=0 || STATUS=$?
+          grep -E "error:|Test Case .* (passed|failed)|\*\* TEST " ui.log | sort -u | head -60
+          find screenshots -name '*.png' | sort
+          exit $STATUS
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.device }}
+          path: |
+            screenshots
+            ui.log

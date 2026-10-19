@@ -1,7 +1,7 @@
 import Foundation
 
 /// Manages celebration triggers, queuing, and deduplication.
-/// Max 1 celebration per app session; others queued for next foreground.
+/// Each event shows at most once; several earned together are shown one after another.
 @MainActor
 class CelebrationManager: ObservableObject {
     /// Events waiting to be shown.
@@ -9,9 +9,6 @@ class CelebrationManager: ObservableObject {
 
     /// Events already shown this session.
     private var shownThisSession: Set<String> = []
-
-    /// Whether a celebration has been shown this session.
-    private var hasShownThisSession = false
 
     /// Attempts to trigger a celebration. Returns true if queued.
     @discardableResult
@@ -24,19 +21,11 @@ class CelebrationManager: ObservableObject {
     }
 
     /// Dequeues the next celebration to show.
-    /// Returns nil if already shown one this session or queue is empty.
+    /// Returns nil when the queue is empty.
     func dequeueNext() -> CelebrationEvent? {
-        guard !hasShownThisSession else { return nil }
         guard !queue.isEmpty else { return nil }
-
         let event = queue.removeFirst()
         shownThisSession.insert(event.id)
-        hasShownThisSession = true
         return event
-    }
-
-    /// Resets session tracking (call on app foreground).
-    func resetSession() {
-        hasShownThisSession = false
     }
 }

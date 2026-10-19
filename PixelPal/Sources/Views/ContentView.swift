@@ -5,25 +5,18 @@ import StoreKit
 struct ContentView: View {
     @EnvironmentObject var healthManager: HealthKitManager
     @StateObject private var appState = AppStateManager()
-    @State private var showSplash = true
+    /// Observed so finishing onboarding switches to the tabs (and reloads state) immediately.
+    @ObservedObject private var persistence = PersistenceManager.shared
+    @State private var showSplash = !LaunchFlags.uiTest
 
     var body: some View {
         ZStack {
-            // Ambient gradient background
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color(red: 0.05, green: 0.02, blue: 0.15),
-                    Color(red: 0.08, green: 0.03, blue: 0.20),
-                    Color(red: 0.05, green: 0.02, blue: 0.15)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            Theme.backgroundGradient
+                .ignoresSafeArea()
 
             if showSplash {
                 SplashScreenView {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withMotion(Motion.smooth) {
                         showSplash = false
                     }
                 }
@@ -36,15 +29,28 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
+        .motion(Motion.smooth, value: isOnboardingComplete)
         .onAppear {
+            prepareForUITestsIfNeeded()
             appState.loadSavedData()
-            // Always request authorization on launch — idempotent if already granted.
-            // For HealthKit read permissions, this won't re-show the dialog if already responded.
-            healthManager.requestAuthorization { _ in
-                appState.fetchCumulativeSteps(healthManager: healthManager)
+            // Ask for Health access only after onboarding has explained why (idempotent once answered).
+            // Today's/weekly fetch happens in the authorization callback;
+            // cumulative fetch follows via onChange(isAuthorized).
+            if isOnboardingComplete && !LaunchFlags.uiTest {
+                healthManager.requestAuthorization { _ in }
             }
             Task {
+                // Local entitlements first (offline-safe), then products from the App Store.
+                await appState.storeManager.updatePurchasedProducts()
                 await appState.storeManager.setup()
+            }
+        }
+        .onChange(of: isOnboardingComplete) { completed in
+            guard completed else { return }
+            // Pick up the chosen character and generate today's missions without a relaunch.
+            appState.loadSavedData()
+            if !LaunchFlags.uiTest {
+                healthManager.requestAuthorization { _ in }
             }
         }
         .onChange(of: healthManager.currentSteps) { _ in
@@ -55,8 +61,6 @@ struct ContentView: View {
         }
         .onChange(of: healthManager.isAuthorized) { authorized in
             if authorized {
-                appState.loadSavedData()
-                healthManager.fetchData()
                 appState.fetchCumulativeSteps(healthManager: healthManager)
             }
         }
@@ -65,6 +69,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             NotificationManager.shared.scheduleReEngagement()
+            appState.liveActivityManager.markIdle()
+            // Finish pending writes before the app can be suspended.
+            PersistenceManager.shared.flush()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             NotificationManager.shared.cancelReEngagement()
@@ -72,11 +79,25 @@ struct ContentView: View {
             // Refresh health data so SharedData + widget stay in sync
             healthManager.fetchData()
             appState.fetchCumulativeSteps(healthManager: healthManager)
+            // Catch subscription lapses/refunds that don't emit a transaction.
+            Task { await appState.storeManager.updatePurchasedProducts() }
         }
+        .preferredColorScheme(.dark)
     }
 
     private var isOnboardingComplete: Bool {
-        PersistenceManager.shared.userProfile != nil
+        persistence.userProfile != nil
+    }
+
+    /// Screenshot tests: start clean or pre-onboarded. No-op for normal launches.
+    private func prepareForUITestsIfNeeded() {
+        guard LaunchFlags.uiTest else { return }
+        if LaunchFlags.resetData {
+            persistence.clearAll()
+        }
+        if LaunchFlags.skipOnboarding && persistence.userProfile == nil {
+            persistence.saveUserProfile(UserProfile.createNew(gender: .female))
+        }
     }
 }
 
@@ -84,16 +105,7 @@ struct ContentView: View {
 
 struct GlassCardModifier: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial.opacity(0.6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-            )
+        content.ppCard()
     }
 }
 
@@ -109,41 +121,16 @@ struct PhaseDisplayView: View {
     let phase: Int
     let isPremium: Bool
 
-    private var phaseColor: Color {
-        switch phase {
-        case 1: return .gray
-        case 2: return .blue
-        case 3: return .purple
-        case 4: return .orange
-        default: return .gray
-        }
-    }
-
-    private var phaseIcon: String {
-        switch phase {
-        case 1: return "circle"
-        case 2: return "circle.fill"
-        case 3: return "star.fill"
-        case 4: return "sparkles"
-        default: return "circle"
-        }
-    }
-
-    private var phaseName: String {
-        switch phase {
-        case 1: return "Seedling"
-        case 2: return "Growing"
-        case 3: return "Thriving"
-        case 4: return "Legendary"
-        default: return "Unknown"
-        }
-    }
+    private var phaseColor: Color { Theme.phaseColor(phase) }
+    private var phaseIcon: String { Theme.phaseIcon(phase) }
+    private var phaseName: String { Theme.phaseName(phase) }
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: phaseIcon)
                 .font(.title3)
                 .foregroundColor(phaseColor)
+                .accessibilityHidden(true)
 
             Text("Phase \(phase)")
                 .font(.headline)
@@ -156,12 +143,13 @@ struct PhaseDisplayView: View {
             if isPremium {
                 Image(systemName: "crown.fill")
                     .font(.caption)
-                    .foregroundColor(.yellow)
+                    .foregroundColor(Theme.gold)
+                    .accessibilityLabel("Premium")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(phaseColor.opacity(0.2))
-        .cornerRadius(20)
+        .padding(.horizontal, Space.l)
+        .padding(.vertical, Space.s)
+        .background(phaseColor.opacity(0.2), in: Capsule())
+        .accessibilityElement(children: .combine)
     }
 }

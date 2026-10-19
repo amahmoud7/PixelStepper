@@ -1,358 +1,101 @@
 import SwiftUI
 
-/// Glass Dashboard streak display — ring + stats side-by-side, steps/missions grid below, at-risk banner.
+/// Compact streak row: flame + "N-day streak" + best, with this week's goal squares underneath.
+/// Goal progress itself lives in the Home hero ring, so nothing here repeats it.
 struct StreakHeroView: View {
     let streak: Int
-    let todaySteps: Int
-    let dailyGoal: Int
-    let missionsCompleted: Int
-    let missionsTotal: Int
-    var isPremium: Bool = false
-    var onUpgradeTap: (() -> Void)?
 
-    private var progress: Double {
-        min(Double(todaySteps) / Double(dailyGoal), 1.0)
-    }
-
-    private var isAtRisk: Bool {
-        streak > 0 && todaySteps < dailyGoal
-    }
-
-    private var streakColor: Color {
-        if streak == 0 { return .gray }
-        if streak >= 30 { return Color(red: 1.0, green: 0.84, blue: 0.0) }
-        if streak >= 7 { return Color(red: 1.0, green: 0.2, blue: 0.1) }
-        return .orange
-    }
+    /// Observed so best streak and the week squares update live.
+    @ObservedObject private var persistence = PersistenceManager.shared
+    @ObservedObject private var historyManager = HistoryManager.shared
 
     private var bestStreak: Int {
-        PersistenceManager.shared.progressState.longestStreak
+        max(persistence.progressState.longestStreak, streak)
+    }
+
+    private var title: String {
+        streak > 0 ? "\(streak)-day streak" : "Start a streak today"
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            if streak == 0 {
-                zeroStreakView
-            } else {
-                activeStreakView
+        let weekData = historyManager.history.weekViewData()
+        let metCount = weekData.filter { $0.isGoalMet }.count
+
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack(spacing: Space.s) {
+                Image(systemName: "flame.fill")
+                    .font(.body)
+                    .foregroundColor(streak > 0 ? Theme.amber : Theme.textTertiary)
+
+                Text(title)
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: Space.s)
+
+                if bestStreak > 0 {
+                    Text("Best \(bestStreak)")
+                        .font(.ppBody)
+                        .foregroundColor(Theme.textSecondary)
+                        .numericRoll(value: bestStreak)
+                }
+            }
+
+            HStack(spacing: 0) {
+                ForEach(weekData) { day in
+                    WeekDaySquare(day: day)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
+        .ppCard(padding: Space.l, radius: Radius.card)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText(metCount: metCount, dayCount: weekData.count))
     }
 
-    // MARK: - Zero Streak
-
-    private var zeroStreakView: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 16) {
-                // Progress ring
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.06), lineWidth: 5)
-                        .frame(width: 72, height: 72)
-
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(Color.blue, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .frame(width: 72, height: 72)
-                        .rotationEffect(.degrees(-90))
-
-                    VStack(spacing: 1) {
-                        Text("\(Int(progress * 100))%")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("START YOUR STREAK")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(1)
-
-                    Text("0 days")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-
-                    Text("\(max(0, dailyGoal - todaySteps).formatted()) steps to begin")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.blue.opacity(0.8))
-                }
-
-                Spacer()
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    )
-            )
-        }
-    }
-
-    // MARK: - Active Streak (Glass Dashboard)
-
-    private var activeStreakView: some View {
-        VStack(spacing: 10) {
-            // Main glass card: ring + stats side-by-side
-            HStack(spacing: 16) {
-                // Streak ring
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.06), lineWidth: 5)
-                        .frame(width: 76, height: 76)
-
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(
-                            LinearGradient(
-                                colors: [streakColor, streakColor.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 5, lineCap: .round)
-                        )
-                        .frame(width: 76, height: 76)
-                        .rotationEffect(.degrees(-90))
-                        .shadow(color: streakColor.opacity(0.3), radius: 6)
-
-                    VStack(spacing: 1) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(streakColor)
-
-                        Text("\(streak)")
-                            .font(.system(size: 22, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
-                    }
-                }
-
-                // Stats column
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("CURRENT STREAK")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(1)
-
-                    Text("\(streak) days")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-
-                    // 7-day dots
-                    weekDots
-
-                    Text("Best: \(bestStreak) days")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(streakColor.opacity(0.8))
-                }
-
-                Spacer()
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    )
-            )
-
-            // 2-column grid: steps + missions
-            HStack(spacing: 10) {
-                // Steps mini card
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("TODAY")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(0.5)
-
-                    Text("\(todaySteps.formatted())")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.white.opacity(0.06))
-                                .frame(height: 3)
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(red: 0.2, green: 0.78, blue: 0.35), Color(red: 0.19, green: 0.82, blue: 0.35)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: geo.size.width * progress, height: 3)
-                        }
-                    }
-                    .frame(height: 3)
-
-                    Text("\(Int(progress * 100))% of goal")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.3))
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                        )
-                )
-
-                // Missions mini card
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("MISSIONS")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(0.5)
-
-                    HStack(alignment: .firstTextBaseline, spacing: 1) {
-                        Text("\(missionsCompleted)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                        Text("/\(missionsTotal)")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundColor(.white.opacity(0.3))
-                    }
-
-                    HStack(spacing: 4) {
-                        ForEach(0..<missionsTotal, id: \.self) { i in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(i < missionsCompleted
-                                    ? Color(red: 0.2, green: 0.78, blue: 0.35)
-                                    : (i == missionsCompleted
-                                        ? Color(red: 0.49, green: 0.36, blue: 0.99).opacity(0.4)
-                                        : Color.white.opacity(0.06)))
-                                .frame(height: 3)
-                        }
-                    }
-
-                    let balance = PersistenceManager.shared.progressState.stepCoinBalance
-                    Text("+\(balance) coins earned")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.3))
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                        )
-                )
-            }
-
-            // Streak at risk banner
-            if isAtRisk {
-                StreakAtRiskView(
-                    stepsRemaining: dailyGoal - todaySteps,
-                    streak: streak,
-                    isPremium: isPremium,
-                    onUpgradeTap: onUpgradeTap
-                )
-            }
-        }
-    }
-
-    // MARK: - Week Dots
-
-    private var weekDots: some View {
-        let weekData = HistoryManager.shared.history.weekViewData()
-
-        return HStack(spacing: 4) {
-            ForEach(weekData) { day in
-                Circle()
-                    .fill(day.isToday && !day.isGoalMet
-                        ? Color.orange.opacity(0.4)
-                        : (day.isGoalMet ? Color(red: 0.2, green: 0.78, blue: 0.35) : Color.white.opacity(0.1)))
-                    .frame(width: 6, height: 6)
-                    .overlay(
-                        day.isToday && !day.isGoalMet
-                            ? Circle().stroke(Color.orange.opacity(0.6), lineWidth: 1)
-                            : nil
-                    )
-            }
-        }
+    private func accessibilityText(metCount: Int, dayCount: Int) -> String {
+        var parts = [title]
+        if bestStreak > 0 { parts.append("best \(bestStreak) days") }
+        parts.append("\(metCount) of \(dayCount) days at goal this week")
+        return parts.joined(separator: ", ")
     }
 }
 
-/// Streak-at-risk alert banner with time estimate.
-struct StreakAtRiskView: View {
-    let stepsRemaining: Int
-    let streak: Int
-    var isPremium: Bool = false
-    var onUpgradeTap: (() -> Void)?
-    @State private var isPulsing = false
+/// One day of the week strip: a small rounded square plus its weekday initial.
+private struct WeekDaySquare: View {
+    let day: DailyHistory.DayViewData
 
-    private var walkMinutes: Int {
-        max(5, stepsRemaining / 65) // ~65 steps per minute casual walk
+    /// Today stays neutral until the goal is met; only finished days can read as below goal.
+    private var fill: Color {
+        if day.isGoalMet { return Theme.goalMet }
+        if day.isToday { return Theme.noData }
+        if day.hasData { return Theme.belowGoal }
+        return Theme.noData
+    }
+
+    private var initial: String {
+        let calendar = Calendar.current
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let index = calendar.component(.weekday, from: day.date) - 1
+        return symbols.indices.contains(index) ? symbols[index] : ""
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                    .font(.system(size: 14))
-                    .scaleEffect(isPulsing ? 1.1 : 1.0)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Streak at risk")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.orange)
-
-                    Text("\(stepsRemaining.formatted()) steps to save it — ~\(walkMinutes) min walk")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.orange.opacity(0.7))
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
-            if !isPremium, let onUpgradeTap {
-                Button(action: onUpgradeTap) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "shield.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color(red: 0.0, green: 0.83, blue: 1.0))
-                        Text("Premium includes Streak Freeze")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.3))
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.04))
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.orange.opacity(0.08))
+        VStack(spacing: Space.xs) {
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                .fill(fill)
+                .frame(width: 10, height: 10)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                        .stroke(day.isToday ? Theme.today : .clear, lineWidth: 1.5)
+                        .padding(-2.5)
                 )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
+
+            Text(initial)
+                .font(.ppMicro)
+                .foregroundColor(day.isToday ? Theme.textPrimary : Theme.textTertiary)
         }
     }
 }

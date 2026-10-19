@@ -1,43 +1,140 @@
 import SwiftUI
+import Charts
 
-/// Stats tab: Week memory + personal records + phase progress + 30-day calendar heatmap.
+/// Stats tab: this week's chart → phase progress → 30-day calendar → personal records.
 struct StatsView: View {
     @EnvironmentObject var appState: AppStateManager
+    @ObservedObject private var historyManager = HistoryManager.shared
+
+    /// True until the first day with recorded steps lands in history.
+    private var hasHistory: Bool {
+        historyManager.history.days.contains { $0.steps > 0 }
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                Text("Stats")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-
-                // Week memory
-                WeekMemorySection()
-                    .padding(.horizontal, 20)
-
-                // Personal records
-                PersonalRecordsView()
-                    .padding(.horizontal, 20)
+            VStack(spacing: Space.screen) {
+                if hasHistory {
+                    // This week (bar chart replaces the old 7-dot memory row)
+                    ThisWeekCard(days: historyManager.last7Days())
+                        .padding(.horizontal, Space.screen)
+                } else {
+                    StatsEmptyState()
+                        .padding(.horizontal, Space.screen)
+                }
 
                 // Phase progress
                 PhaseProgressCard(
                     weeklySteps: appState.weeklySteps,
                     currentPhase: appState.currentPhase,
-                    isPremium: appState.storeManager.isPremium
+                    isPremium: appState.storeManager.isPremium,
+                    onUnlock: { appState.showPaywall = true }
                 )
-                .padding(.horizontal, 20)
+                .padding(.horizontal, Space.screen)
 
                 // 30-day calendar heatmap
-                MonthCalendarView()
-                    .padding(.horizontal, 20)
+                if hasHistory {
+                    MonthCalendarView()
+                        .padding(.horizontal, Space.screen)
+                }
 
-                Spacer().frame(height: 100)
+                // Personal records
+                PersonalRecordsView()
+                    .padding(.horizontal, Space.screen)
+
+                Spacer().frame(height: Space.xl)
             }
+            .padding(.top, Space.s)
         }
+    }
+}
+
+// MARK: - This Week
+
+private struct ThisWeekCard: View {
+    let days: [DailyHistory.DayViewData]
+
+    private let goal = 7500
+
+    private var daysAtGoal: Int { days.filter(\.isGoalMet).count }
+    private var totalSteps: Int { days.reduce(0) { $0 + $1.steps } }
+
+    /// Keeps the goal line visible on low-step weeks.
+    private var yMax: Int { max(days.map(\.steps).max() ?? 0, goal) * 11 / 10 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text("This week")
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text("\(daysAtGoal) of 7 days at goal · \(totalSteps.formatted()) steps")
+                    .font(.ppCaption)
+                    .foregroundColor(Theme.textSecondary)
+            }
+
+            Chart {
+                ForEach(days) { day in
+                    BarMark(
+                        x: .value("Day", day.date, unit: .day),
+                        y: .value("Steps", day.steps)
+                    )
+                    .foregroundStyle(barColor(for: day))
+                    .cornerRadius(2)
+                    .accessibilityLabel(Text(day.isToday ? "Today" : day.date.formatted(.dateTime.weekday(.wide))))
+                    .accessibilityValue(Text("\(day.steps.formatted()) steps\(day.isGoalMet ? ", goal met" : "")"))
+                }
+
+                RuleMark(y: .value("Goal", goal))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text("Goal")
+                            .font(.ppMicro)
+                            .foregroundColor(Theme.textTertiary)
+                    }
+                    .accessibilityLabel(Text("Daily goal"))
+                    .accessibilityValue(Text("\(goal.formatted()) steps"))
+            }
+            .chartYScale(domain: 0...yMax)
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day)) { _ in
+                    AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+                }
+            }
+            .frame(height: 160)
+        }
+        .glassCard()
+    }
+
+    private func barColor(for day: DailyHistory.DayViewData) -> Color {
+        if day.isGoalMet { return Theme.goalMet }
+        if day.isToday { return Theme.today }
+        return Theme.belowGoal
+    }
+}
+
+// MARK: - Empty State
+
+private struct StatsEmptyState: View {
+    var body: some View {
+        VStack(spacing: Space.s) {
+            Image(systemName: "figure.walk")
+                .font(.ppTitle)
+                .foregroundColor(Theme.purpleText)
+                .accessibilityHidden(true)
+
+            Text("Your first week will show up here as you walk.")
+                .font(.ppBody)
+                .foregroundColor(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Space.s)
+        .ppCard()
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -47,77 +144,73 @@ private struct PhaseProgressCard: View {
     let weeklySteps: Int
     let currentPhase: Int
     let isPremium: Bool
+    let onUnlock: () -> Void
 
     private var nextThreshold: Int {
         PhaseCalculator.nextThreshold(for: currentPhase)
     }
 
     private var progress: Double {
-        PhaseCalculator.weeklyProgress(weeklySteps: weeklySteps, currentPhase: currentPhase)
+        min(max(PhaseCalculator.weeklyProgress(weeklySteps: weeklySteps, currentPhase: currentPhase), 0), 1)
     }
 
     private var progressColor: Color {
-        switch currentPhase {
-        case 1: return .gray
-        case 2: return .blue
-        case 3: return .purple
-        case 4: return .orange
-        default: return .gray
-        }
+        Theme.phaseColor(currentPhase)
+    }
+
+    /// Phase color for small text; the brand purple is too dark at caption sizes.
+    private var progressTextColor: Color {
+        currentPhase == 3 ? Theme.purpleText : progressColor
     }
 
     private var phaseName: String {
-        switch currentPhase {
-        case 1: return "Seedling"
-        case 2: return "Growing"
-        case 3: return "Thriving"
-        case 4: return "Legendary"
-        default: return ""
-        }
+        Theme.phaseName(currentPhase)
     }
 
     private var nextPhaseName: String {
-        switch currentPhase {
-        case 1: return "Growing"
-        case 2: return "Thriving"
-        case 3: return "Legendary"
-        default: return ""
-        }
+        Theme.phaseName(currentPhase + 1)
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Space.m) {
             HStack {
-                Text("Phase Progress")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                Text("Phase progress")
+                    .font(.ppSection)
+                    .foregroundColor(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Text("Phase \(currentPhase) · \(phaseName)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(progressColor)
+                    .font(.ppCaption.weight(.semibold))
+                    .foregroundColor(progressTextColor)
             }
 
             if currentPhase < 4 {
                 // Step count display
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
                     Text(weeklySteps.formatted())
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(.ppStat)
+                        .foregroundColor(Theme.textPrimary)
+                        .monospacedDigit()
+                        .numericRoll(value: weeklySteps)
                     Text("/ \(nextThreshold.formatted()) steps")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(.ppBody)
+                        .foregroundColor(Theme.textSecondary)
                     Spacer()
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(progressColor)
+                        .font(.ppBody.weight(.bold))
+                        .foregroundColor(progressTextColor)
+                        .monospacedDigit()
+                        .numericRoll(value: progress)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(weeklySteps.formatted()) of \(nextThreshold.formatted()) steps this week")
+                .accessibilityValue("\(Int(progress * 100)) percent")
 
                 // Progress bar
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.1))
+                            .fill(Theme.surfaceStrong)
                             .frame(height: 8)
 
                         RoundedRectangle(cornerRadius: 4)
@@ -130,42 +223,59 @@ private struct PhaseProgressCard: View {
                             )
                             .frame(width: geometry.size.width * progress, height: 8)
                             .shadow(color: progressColor.opacity(0.3), radius: 4)
+                            .motion(Motion.number, value: progress)
                     }
                 }
                 .frame(height: 8)
+                .accessibilityHidden(true)
 
                 if currentPhase >= 2 && !isPremium {
-                    Text("Unlock Premium for Phase \(currentPhase + 1)")
-                        .font(.caption2)
-                        .foregroundColor(.purple.opacity(0.8))
+                    Button {
+                        Haptics.tap()
+                        onUnlock()
+                    } label: {
+                        HStack(spacing: Space.xs) {
+                            Text("Unlock Premium for Phase \(currentPhase + 1)")
+                            Image(systemName: "chevron.right")
+                                .accessibilityHidden(true)
+                        }
+                        .font(.ppCaption.weight(.semibold))
+                        .foregroundColor(Theme.purpleText)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PPPressableStyle())
                 } else {
                     let remaining = max(0, nextThreshold - weeklySteps)
                     Text("\(remaining.formatted()) steps to \(nextPhaseName) · resets weekly")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.35))
+                        .font(.ppMicro)
+                        .foregroundColor(Theme.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
                     Text(weeklySteps.formatted())
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(.ppStat)
+                        .foregroundColor(Theme.textPrimary)
+                        .monospacedDigit()
+                        .numericRoll(value: weeklySteps)
                     Text("steps this week")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(.ppBody)
+                        .foregroundColor(Theme.textSecondary)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
 
-                GeometryReader { geometry in
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(progressColor)
-                        .frame(height: 8)
-                        .shadow(color: progressColor.opacity(0.3), radius: 4)
-                }
-                .frame(height: 8)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(progressColor)
+                    .frame(height: 8)
+                    .shadow(color: progressColor.opacity(0.3), radius: 4)
+                    .accessibilityHidden(true)
 
                 Text("Maximum evolution reached!")
-                    .font(.caption2)
-                    .foregroundColor(.orange.opacity(0.8))
+                    .font(.ppMicro)
+                    .foregroundColor(Theme.amber)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .glassCard()

@@ -90,14 +90,14 @@ final class SpriteAssetsTests: XCTestCase {
         XCTAssertEqual(name, "male_walking_1")
     }
 
-    func testWalkingSpriteName_clampsToEight_whenNine() {
-        let name = SpriteAssets.walkingSpriteName(gender: .male, frame: 9)
-        XCTAssertEqual(name, "male_walking_8")
+    func testWalkingSpriteName_clampsToLastFrame_whenOnePastEnd() {
+        let name = SpriteAssets.walkingSpriteName(gender: .male, frame: SpriteAssets.walkingFrameCount + 1)
+        XCTAssertEqual(name, "male_walking_\(SpriteAssets.walkingFrameCount)")
     }
 
-    func testWalkingSpriteName_clampsToEight_whenLarge() {
+    func testWalkingSpriteName_clampsToLastFrame_whenLarge() {
         let name = SpriteAssets.walkingSpriteName(gender: .female, frame: 100)
-        XCTAssertEqual(name, "female_walking_8")
+        XCTAssertEqual(name, "female_walking_\(SpriteAssets.walkingFrameCount)")
     }
 
     // MARK: - Walking Raw String Overload
@@ -116,9 +116,9 @@ final class SpriteAssetsTests: XCTestCase {
 
     func testAllAssetNames_hasCorrectCount() {
         // 2 genders x 3 states x 2 frames = 12 state sprites
-        // 2 genders x 8 walking frames = 16 walking sprites
-        // Total = 28
-        XCTAssertEqual(SpriteAssets.allAssetNames.count, 28)
+        // 2 genders x 32 walking frames = 64 walking sprites (matches the asset catalog)
+        XCTAssertEqual(SpriteAssets.walkingFrameCount, 32)
+        XCTAssertEqual(SpriteAssets.allAssetNames.count, 12 + 2 * SpriteAssets.walkingFrameCount)
     }
 
     func testAllAssetNames_containsStateSprites() {

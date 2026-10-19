@@ -156,6 +156,13 @@ struct PhaseDisplayView: View {
     private var phaseIcon: String { Theme.phaseIcon(phase) }
     private var phaseName: String { Theme.phaseName(phase) }
 
+    private var phaseText: some View {
+        Text("Phase \(phase)")
+            .font(.headline)
+            .foregroundColor(.white)
+            .lineLimit(1)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: phaseIcon)
@@ -163,17 +170,17 @@ struct PhaseDisplayView: View {
                 .foregroundColor(phaseColor)
                 .accessibilityHidden(true)
 
-            // One line always; shrink rather than wrap ("Pha/se 2") or push the bar off-screen.
-            Text("Phase \(phase)")
-                .font(.headline)
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .layoutPriority(1)
-
-            Text("\u{2022} \(phaseName)")
-                .font(.subheadline)
-                .foregroundColor(phaseColor)
-                .lineLimit(1)
+            // One line always: with the name when it fits, otherwise just "Phase N" (never "Gro…").
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    phaseText
+                    Text("\u{2022} \(phaseName)")
+                        .font(.subheadline)
+                        .foregroundColor(phaseColor)
+                        .lineLimit(1)
+                }
+                phaseText
+            }
 
             if isPremium {
                 Image(systemName: "crown.fill")

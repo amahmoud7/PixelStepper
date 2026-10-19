@@ -17,29 +17,44 @@ struct StreakHeroView: View {
         streak > 0 ? "\(streak)-day streak" : "Start a streak today"
     }
 
+    private var titleLabel: some View {
+        HStack(spacing: Space.s) {
+            Image(systemName: "flame.fill")
+                .font(.body)
+                .foregroundColor(streak > 0 ? Theme.amber : Theme.textTertiary)
+            Text(title)
+                .font(.ppSection)
+                .foregroundColor(Theme.textPrimary)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private var bestLabel: some View {
+        if bestStreak > 0 {
+            Text("Best \(bestStreak)")
+                .font(.ppBody)
+                .foregroundColor(Theme.textSecondary)
+                .lineLimit(1)
+                .numericRoll(value: bestStreak)
+        }
+    }
+
     var body: some View {
         let weekData = historyManager.history.weekViewData()
         let metCount = weekData.filter { $0.isGoalMet }.count
 
         VStack(alignment: .leading, spacing: Space.m) {
-            HStack(spacing: Space.s) {
-                Image(systemName: "flame.fill")
-                    .font(.body)
-                    .foregroundColor(streak > 0 ? Theme.amber : Theme.textTertiary)
-
-                Text(title)
-                    .font(.ppSection)
-                    .foregroundColor(Theme.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Spacer(minLength: Space.s)
-
-                if bestStreak > 0 {
-                    Text("Best \(bestStreak)")
-                        .font(.ppBody)
-                        .foregroundColor(Theme.textSecondary)
-                        .numericRoll(value: bestStreak)
+            // Side by side when it fits; "Best N" moves under the title at large text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Space.s) {
+                    titleLabel
+                    Spacer(minLength: Space.s)
+                    bestLabel
+                }
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    titleLabel
+                    bestLabel
                 }
             }
 

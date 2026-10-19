@@ -82,9 +82,13 @@ struct ProfileView: View {
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Phase \(appState.currentPhase) · \(Theme.phaseName(appState.currentPhase))")
+                    // "Phase 2" and the name on their own lines read better than a mid-wrap "· Growing".
+                    Text("Phase \(appState.currentPhase)")
                         .font(.ppSection)
                         .foregroundColor(Theme.textPrimary)
+                    Text(Theme.phaseName(appState.currentPhase))
+                        .font(.ppBody.weight(.semibold))
+                        .foregroundColor(Theme.phaseColor(appState.currentPhase))
 
                     Text(appState.avatarState.description)
                         .font(.ppCaption)

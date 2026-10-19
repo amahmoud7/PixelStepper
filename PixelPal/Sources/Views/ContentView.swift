@@ -163,13 +163,17 @@ struct PhaseDisplayView: View {
                 .foregroundColor(phaseColor)
                 .accessibilityHidden(true)
 
+            // One line always; shrink rather than wrap ("Pha/se 2") or push the bar off-screen.
             Text("Phase \(phase)")
                 .font(.headline)
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .layoutPriority(1)
 
             Text("\u{2022} \(phaseName)")
                 .font(.subheadline)
                 .foregroundColor(phaseColor)
+                .lineLimit(1)
 
             if isPremium {
                 Image(systemName: "crown.fill")
@@ -178,6 +182,7 @@ struct PhaseDisplayView: View {
                     .accessibilityLabel("Premium")
             }
         }
+        .minimumScaleFactor(0.7)
         .padding(.horizontal, Space.l)
         .padding(.vertical, Space.s)
         .background(phaseColor.opacity(0.2), in: Capsule())

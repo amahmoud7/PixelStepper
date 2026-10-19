@@ -131,16 +131,4 @@ struct ProgressState: Codable, Equatable {
         streakFreezeUsedDate = try container.decodeIfPresent(Date.self, forKey: .streakFreezeUsedDate)
         rewardLedger = (try? container.decodeIfPresent(RewardLedger.self, forKey: .rewardLedger)) ?? RewardLedger()
     }
-
-    /// Updates the phase based on total steps and premium status.
-    mutating func updatePhase(isPremium: Bool) {
-        let newPhase = PhaseCalculator.currentPhase(
-            totalSteps: totalStepsSinceStart,
-            isPremium: isPremium
-        )
-        // Phase can only increase, never decrease
-        if newPhase > currentPhase {
-            currentPhase = newPhase
-        }
-    }
 }

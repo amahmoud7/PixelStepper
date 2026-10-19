@@ -89,7 +89,8 @@ private struct ThisWeekCard: View {
                 RuleMark(y: .value("Goal", goal))
                     .foregroundStyle(Theme.textTertiary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    .annotation(position: .top, alignment: .trailing) {
+                    // Leading, so it never collides with the trailing y-axis labels.
+                    .annotation(position: .top, alignment: .leading) {
                         Text("Goal")
                             .font(.ppMicro)
                             .foregroundColor(Theme.textTertiary)
@@ -104,6 +105,8 @@ private struct ThisWeekCard: View {
                 }
             }
             .frame(height: 160)
+            // Axis labels are chart chrome; cap them so bars keep their room at accessibility sizes.
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
         }
         .glassCard()
     }
@@ -171,17 +174,33 @@ private struct PhaseProgressCard: View {
         Theme.phaseName(currentPhase + 1)
     }
 
+    private var phaseTitle: some View {
+        Text("Phase progress")
+            .font(.ppSection)
+            .foregroundColor(Theme.textPrimary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var phaseLabel: some View {
+        Text("Phase \(currentPhase) · \(phaseName)")
+            .font(.ppCaption.weight(.semibold))
+            .foregroundColor(progressTextColor)
+    }
+
     var body: some View {
         VStack(spacing: Space.m) {
-            HStack {
-                Text("Phase progress")
-                    .font(.ppSection)
-                    .foregroundColor(Theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Text("Phase \(currentPhase) · \(phaseName)")
-                    .font(.ppCaption.weight(.semibold))
-                    .foregroundColor(progressTextColor)
+            // Side by side when it fits; stacked at large text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    phaseTitle
+                    Spacer()
+                    phaseLabel
+                }
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    phaseTitle
+                    phaseLabel
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if currentPhase < 4 {
@@ -191,6 +210,9 @@ private struct PhaseProgressCard: View {
                         .font(.ppStat)
                         .foregroundColor(Theme.textPrimary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .layoutPriority(1)
                         .numericRoll(value: weeklySteps)
                     Text("/ \(nextThreshold.formatted()) steps")
                         .font(.ppBody)
@@ -200,6 +222,8 @@ private struct PhaseProgressCard: View {
                         .font(.ppBody.weight(.bold))
                         .foregroundColor(progressTextColor)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .fixedSize()
                         .numericRoll(value: progress)
                 }
                 .accessibilityElement(children: .ignore)
@@ -258,6 +282,9 @@ private struct PhaseProgressCard: View {
                         .font(.ppStat)
                         .foregroundColor(Theme.textPrimary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .layoutPriority(1)
                         .numericRoll(value: weeklySteps)
                     Text("steps this week")
                         .font(.ppBody)

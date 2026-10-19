@@ -129,33 +129,6 @@ class HistoryManager: ObservableObject {
         PersistenceManager.shared.updateProgress { $0.streakFreezeUsedDate = frozenDate }
     }
 
-    /// Whether the streak freeze is available this week (premium only).
-    var isStreakFreezeAvailable: Bool {
-        guard PersistenceManager.shared.entitlements.isPremium else { return false }
-        guard let lastUsed = PersistenceManager.shared.progressState.streakFreezeUsedDate else { return true }
-        let daysSince = Calendar.current.dateComponents([.day], from: lastUsed, to: Date()).day ?? 0
-        return daysSince >= 7
-    }
-
-    /// Whether the streak freeze is currently active (protecting the streak right now).
-    var isStreakFreezeActive: Bool {
-        guard PersistenceManager.shared.entitlements.isPremium else { return false }
-        let (_, frozenDate) = history.countConsecutiveGoalsMetWithFreeze()
-        return frozenDate != nil
-    }
-    
-    /// Reset history (for testing).
-    func reset() {
-        history = DailyHistory.createNew()
-        todayState = nil
-        persistence.saveDailyHistory(history)
-    }
-    
-    /// Check if this is a new user (no history).
-    var isNewUser: Bool {
-        history.days.isEmpty
-    }
-    
     // MARK: - Private
     
     private func setupDayChangeMonitoring() {
@@ -182,36 +155,5 @@ class HistoryManager: ObservableObject {
         // Nothing special needed - steps won't be updated for past dates
         // Just persist current state
         persistence.saveDailyHistory(history)
-    }
-}
-
-// MARK: - SharedData Extension
-
-extension SharedData {
-    private static let dailyHistoryKey = "dailyHistory"
-    
-    static func saveDailyHistory(_ history: DailyHistory) {
-        guard let defaults = userDefaults else { return }
-        
-        do {
-            let data = try JSONEncoder().encode(history)
-            defaults.set(data, forKey: dailyHistoryKey)
-        } catch {
-            print("Failed to encode daily history: \(error)")
-        }
-    }
-    
-    static func loadDailyHistory() -> DailyHistory? {
-        guard let defaults = userDefaults,
-              let data = defaults.data(forKey: dailyHistoryKey) else {
-            return nil
-        }
-        
-        do {
-            return try JSONDecoder().decode(DailyHistory.self, from: data)
-        } catch {
-            print("Failed to decode daily history: \(error)")
-            return nil
-        }
     }
 }

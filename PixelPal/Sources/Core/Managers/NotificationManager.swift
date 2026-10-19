@@ -106,20 +106,6 @@ final class NotificationManager {
         center.removePendingNotificationRequests(withIdentifiers: ["reengagement"])
     }
 
-    // MARK: - Milestone Notification
-
-    /// Fires a local notification for streak milestones.
-    func notifyStreakMilestone(_ days: Int) {
-        let content = UNMutableNotificationContent()
-        content.title = "\(days)-Day Streak!"
-        content.body = "Your Stepper is thriving. Keep the momentum going!"
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        let request = UNNotificationRequest(identifier: "streak_\(days)", content: content, trigger: trigger)
-        center.add(request)
-    }
-
     // MARK: - Streak At Risk (6 PM)
 
     /// Schedules a streak-at-risk notification for 6 PM if the user has a streak
@@ -182,36 +168,5 @@ final class NotificationManager {
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
         let request = UNNotificationRequest(identifier: "weekly_summary", content: content, trigger: trigger)
         center.add(request)
-    }
-
-    // MARK: - Inactivity Reminder
-
-    /// Schedules a nudge when the user has been inactive. Call from background
-    /// step monitoring when step delta < 200 over 2 hours.
-    /// Respects 8am-9pm window and max 3 per day.
-    func scheduleInactivityReminder(activeMissionHint: String? = nil) {
-        let hour = Calendar.current.component(.hour, from: Date())
-        guard hour >= 8, hour < 21 else { return }
-
-        // Check how many inactivity reminders fired today
-        let todayKey = "inactivity_reminder_count_\(Calendar.current.startOfDay(for: Date()).timeIntervalSince1970)"
-        let count = UserDefaults.standard.integer(forKey: todayKey)
-        guard count < 3 else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Time to move!"
-
-        if let hint = activeMissionHint {
-            content.body = hint
-        } else {
-            content.body = "You've been still for a while — a quick 10-min walk gets you 1,000 steps!"
-        }
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
-        let request = UNNotificationRequest(identifier: "inactivity_\(count)", content: content, trigger: trigger)
-        center.add(request)
-
-        UserDefaults.standard.set(count + 1, forKey: todayKey)
     }
 }

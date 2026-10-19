@@ -60,11 +60,6 @@ struct DailyGoalState: Codable, Equatable, Identifiable {
 // MARK: - Daily Goal Extensions
 
 extension DailyGoalState {
-    /// Returns a color for UI display based on goal status.
-    var statusColorName: String {
-        isGoalMet ? "goalMet" : "goalMissed"
-    }
-    
     /// Progress toward goal (0.0 to 1.0, can exceed 1.0).
     var progress: Double {
         Double(steps) / Double(goal)

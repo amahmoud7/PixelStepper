@@ -46,7 +46,11 @@ final class ScreenshotTests: XCTestCase {
         pause()
         snap("31-profile-scrolled")
 
-        let unlock = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'premium'")).firstMatch
+        // Profile's "Upgrade" row (free users), falling back to any premium entry point.
+        var unlock = app.buttons["Upgrade"]
+        if !unlock.waitForExistence(timeout: 3) {
+            unlock = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'premium' OR label CONTAINS[c] 'upgrade'")).firstMatch
+        }
         if unlock.waitForExistence(timeout: 3) {
             unlock.tap()
             pause(2)

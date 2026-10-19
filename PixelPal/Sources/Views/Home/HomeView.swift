@@ -1,7 +1,7 @@
 import ActivityKit
 import SwiftUI
 
-/// Home tab: Avatar + streak hero + daily missions + step count.
+/// Home tab: character inside a goal ring (the one focal point), streak row, Lock Screen card, daily missions.
 struct HomeView: View {
     @EnvironmentObject var appState: AppStateManager
     @EnvironmentObject var healthManager: HealthKitManager
@@ -9,6 +9,10 @@ struct HomeView: View {
     @AppStorage("liveActivityCardDismissed") private var liveActivityCardDismissed = false
 
     private var todaySteps: Int { Int(healthManager.currentSteps) }
+
+    // Mirrors AvatarLogic.determineState thresholds (low < 2,500 ≤ neutral < 7,500 ≤ vital).
+    private let neutralThreshold = 2500
+    private let dailyGoal = 7500
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -29,48 +33,19 @@ struct HomeView: View {
                         .padding(.horizontal, Space.screen)
                 }
 
+                // Hero: character inside the goal ring, steps, energy
+                hero
+
+                // Streak row
+                StreakHeroView(streak: appState.currentStreak)
+                    .padding(.horizontal, Space.screen)
+
                 // One-time Lock Screen invitation
                 if showsLiveActivityCard {
                     liveActivityCard
                         .padding(.horizontal, Space.screen)
                         .transition(.opacity)
                 }
-
-                // Hero avatar
-                AvatarView(
-                    state: appState.avatarState,
-                    gender: appState.gender,
-                    phase: appState.currentPhase,
-                    loadout: appState.currentLoadout,
-                    animatesEntrance: true
-                )
-
-                // Step count display
-                VStack(spacing: Space.xxs) {
-                    Text(todaySteps.formatted())
-                        .font(.ppLargeTitle)
-                        .foregroundColor(Theme.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .numericRoll(value: todaySteps)
-                    Text("steps today")
-                        .font(.ppRowTitle)
-                        .foregroundColor(Theme.textTertiary)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(todaySteps.formatted()) steps today")
-
-                // Streak hero (Glass Dashboard)
-                StreakHeroView(
-                    streak: appState.currentStreak,
-                    todaySteps: todaySteps,
-                    dailyGoal: 7500,
-                    missionsCompleted: appState.missionManager.completedCount,
-                    missionsTotal: appState.missionManager.missions.count,
-                    isPremium: appState.storeManager.isPremium,
-                    onUpgradeTap: { appState.showPaywall = true }
-                )
-                .padding(.horizontal, Space.screen)
 
                 // Daily missions
                 DailyMissionsView()
@@ -117,45 +92,37 @@ struct HomeView: View {
     }
 
     private var liveActivityCard: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            HStack(alignment: .top, spacing: Space.m) {
-                Image(systemName: "lock.iphone")
-                    .font(.title2)
-                    .foregroundColor(Theme.purpleText)
-                    .accessibilityHidden(true)
+        HStack(spacing: Space.m) {
+            Image(systemName: "lock.iphone")
+                .font(.title3)
+                .foregroundColor(Theme.purpleText)
+                .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Put your character on your Lock Screen")
-                        .font(.ppSection)
-                        .foregroundColor(Theme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("See your steps every time you glance at your phone.")
-                        .font(.ppBody)
-                        .foregroundColor(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text("Show on Lock Screen")
+                    .font(.ppRowTitle)
+                    .foregroundColor(Theme.textPrimary)
+                Text("Your character and steps at a glance")
+                    .font(.ppMicro)
+                    .foregroundColor(Theme.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .accessibilityElement(children: .combine)
 
-            Button {
-                // Starting flips isActive (synchronously), which hides this card.
-                withMotion(Motion.snappy, reduceMotion: reduceMotion) {
-                    appState.liveActivityManager.startActivity(
-                        steps: Int(healthManager.currentSteps),
-                        state: appState.avatarState,
-                        gender: appState.gender,
-                        phase: appState.currentPhase
-                    )
-                }
-                if appState.liveActivityManager.isActive {
-                    Haptics.success()
-                } else {
-                    Haptics.warning()
-                }
-            } label: {
-                Text("Start Live Activity")
+            Spacer(minLength: Space.xs)
+
+            Button(action: startLiveActivity) {
+                Text("Start")
+                    .font(.ppRowTitle)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, Space.l)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(Theme.purple))
+                    .minTapTarget()
             }
-            .buttonStyle(PPPrimaryButtonStyle())
+            .buttonStyle(PPPressableStyle())
+            .accessibilityLabel("Start Live Activity")
 
             Button {
                 Haptics.soft()
@@ -163,15 +130,117 @@ struct HomeView: View {
                     liveActivityCardDismissed = true
                 }
             } label: {
-                Text("Not now")
-                    .font(.ppRowTitle)
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
                     .foregroundColor(Theme.textTertiary)
-                    .frame(maxWidth: .infinity)
                     .minTapTarget()
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
         }
-        .ppCard(tint: Theme.purple)
+        .padding(.leading, Space.m)
+        .padding(.trailing, Space.xs)
+        .ppCard(padding: 0, radius: Radius.row, tint: Theme.purple)
+    }
+
+    private func startLiveActivity() {
+        // Starting flips isActive (synchronously), which hides this card.
+        withMotion(Motion.snappy, reduceMotion: reduceMotion) {
+            appState.liveActivityManager.startActivity(
+                steps: todaySteps,
+                state: appState.avatarState,
+                gender: appState.gender,
+                phase: appState.currentPhase
+            )
+        }
+        if appState.liveActivityManager.isActive {
+            Haptics.success()
+        } else {
+            Haptics.warning()
+        }
+    }
+
+    // MARK: - Hero
+
+    private var goalProgress: Double {
+        min(1, Double(todaySteps) / Double(dailyGoal))
+    }
+
+    private var ringColor: Color {
+        todaySteps >= dailyGoal ? Theme.goalMet : Theme.phaseColor(appState.currentPhase)
+    }
+
+    private var energyState: AvatarState {
+        AvatarLogic.determineState(steps: todaySteps)
+    }
+
+    private var energyCaption: String {
+        switch energyState {
+        case .low:
+            return "Low energy · \(max(0, neutralThreshold - todaySteps).formatted()) steps to neutral"
+        case .neutral:
+            return "Neutral · \(max(0, dailyGoal - todaySteps).formatted()) steps to vital"
+        case .vital:
+            return "Vital · goal reached"
+        }
+    }
+
+    private var heroAccessibilityLabel: String {
+        let energy: String
+        switch energyState {
+        case .low: energy = "low energy"
+        case .neutral: energy = "neutral energy"
+        case .vital: energy = "vital energy"
+        }
+        return "Your character, \(Theme.phaseName(appState.currentPhase)) phase, "
+            + "\(todaySteps.formatted()) of \(dailyGoal.formatted()) steps, \(energy)"
+    }
+
+    /// Sized so ring + count + caption fit above the tab bar on iPhone SE.
+    private var hero: some View {
+        VStack(spacing: Space.s) {
+            ZStack {
+                Circle()
+                    .stroke(Theme.surfaceStrong, lineWidth: 8)
+
+                Circle()
+                    .trim(from: 0, to: goalProgress)
+                    .stroke(ringColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .motion(Motion.number, value: goalProgress)
+
+                AvatarView(
+                    state: appState.avatarState,
+                    gender: appState.gender,
+                    phase: appState.currentPhase,
+                    size: 170,
+                    loadout: appState.currentLoadout,
+                    animatesEntrance: true
+                )
+            }
+            .frame(width: 240, height: 240)
+
+            VStack(spacing: 0) {
+                Text(todaySteps.formatted())
+                    .font(.ppLargeTitle)
+                    .foregroundColor(Theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .numericRoll(value: todaySteps)
+                Text("of \(dailyGoal.formatted()) steps")
+                    .font(.ppBody)
+                    .foregroundColor(Theme.textSecondary)
+            }
+
+            Text(energyCaption)
+                .font(.ppCaption)
+                .foregroundColor(Theme.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, Space.screen)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(heroAccessibilityLabel)
     }
 
     /// Shows when HealthKit is not available on the device (iPad, etc.)

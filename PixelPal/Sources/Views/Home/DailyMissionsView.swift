@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Daily missions list with left-border color coding, strikethrough completed, premium missions visible.
+/// Daily missions list with left-border color coding and strikethrough completed; one Premium footer for free users.
 struct DailyMissionsView: View {
     @EnvironmentObject var appState: AppStateManager
     @State private var lastCompleted: Int?
@@ -9,10 +9,6 @@ struct DailyMissionsView: View {
 
     private var coinBalance: Int {
         persistence.progressState.stepCoinBalance
-    }
-
-    private var allMissionsCompleted: Bool {
-        appState.missionManager.completedCount == appState.missionManager.missions.count
     }
 
     var body: some View {
@@ -45,20 +41,14 @@ struct DailyMissionsView: View {
                 MissionRow(mission: mission)
             }
 
-            // Weekly challenge (premium only) or locked placeholder
+            // Weekly challenge (premium only)
             if let challenge = appState.missionManager.weeklyChallenge {
                 WeeklyChallengeRow(challenge: challenge)
-            } else if !appState.storeManager.isPremium {
-                lockedWeeklyChallengeRow
             }
 
-            // Premium missions or post-completion upsell
+            // Free users: one quiet upsell instead of several locked cards
             if !appState.storeManager.isPremium {
-                if allMissionsCompleted {
-                    postCompletionBanner
-                } else {
-                    premiumMissionsSection
-                }
+                premiumFooter
             }
         }
         .onAppear {
@@ -78,83 +68,23 @@ struct DailyMissionsView: View {
         appState.showPaywall = true
     }
 
-    // MARK: - Premium Missions
+    // MARK: - Premium Footer
 
-    private var premiumMissionsSection: some View {
-        Button(action: showPaywall) {
-            VStack(alignment: .leading, spacing: Space.s) {
-                // Dashed divider
-                Rectangle()
-                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                    .foregroundColor(Theme.purple.opacity(0.2))
-                    .frame(height: 1)
-
-                Text("PREMIUM MISSIONS")
-                    .font(.ppOverline)
-                    .tracking(1)
-                    .foregroundColor(Theme.purpleText)
-
-                // Locked mission rows
-                lockedMissionRow(title: "Evening Push — 2,000 steps after 5pm")
-                lockedMissionRow(title: "Stay Active — 500+ steps/hr for 4 hrs")
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PPPressableStyle())
-        .accessibilityLabel("Premium missions: Evening Push, Stay Active")
-        .accessibilityHint("Opens Premium")
-    }
-
-    // MARK: - Locked Weekly Challenge
-
-    private var lockedWeeklyChallengeRow: some View {
-        Button(action: showPaywall) {
-            HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "crown.fill")
-                        .font(.caption2)
-                        .foregroundColor(Theme.gold.opacity(0.5))
-                    Text("WEEKLY CHALLENGE")
-                        .font(.ppOverline)
-                        .tracking(1)
-                        .foregroundColor(Theme.gold)
-                }
-
-                Spacer()
-
-                HStack(spacing: Space.xs) {
-                    Image(systemName: "lock.fill")
-                        .font(.caption2)
-                        .foregroundColor(Theme.gold.opacity(0.5))
-                    Text("Unlock with Premium")
-                        .font(.ppMicro)
-                        .foregroundColor(Theme.textSecondary)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, Space.m)
-            .ppCard(padding: 0, radius: Radius.row, tint: Theme.gold)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PPPressableStyle())
-        .accessibilityLabel("Weekly challenge, unlock with Premium")
-    }
-
-    // MARK: - Post-Completion Banner
-
-    private var postCompletionBanner: some View {
+    private var premiumFooter: some View {
         Button(action: showPaywall) {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
                     .font(.body)
-                    .foregroundColor(Theme.purple)
+                    .foregroundColor(Theme.purpleText)
                     .accessibilityHidden(true)
 
-                Text("Unlock 2 bonus missions")
+                Text("2 more missions + weekly challenge with Premium")
                     .font(.ppRowTitle)
                     .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Spacer()
+                Spacer(minLength: Space.s)
 
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
@@ -167,36 +97,7 @@ struct DailyMissionsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PPPressableStyle())
-    }
-
-    private func lockedMissionRow(title: String) -> some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(Theme.purple.opacity(0.15))
-                .frame(width: 3)
-
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Theme.purple.opacity(0.1))
-                    .frame(width: 22, height: 22)
-                    .overlay(
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(Theme.purple.opacity(0.5))
-                    )
-
-                Text(title)
-                    .font(.ppCaption)
-                    .foregroundColor(Theme.textTertiary)
-
-                Spacer()
-            }
-            .padding(.leading, 13)
-            .padding(.trailing, 14)
-            .padding(.vertical, 10)
-        }
-        .background(Color.white.opacity(0.02))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
+        .accessibilityHint("Opens Premium")
     }
 }
 
@@ -217,7 +118,10 @@ private struct CoinIcon: View {
 private struct MissionRow: View {
     let mission: DailyMission
 
-    private var color: Color { Color(hex: mission.type.color) }
+    /// Mission accent; streak missions use amber rather than red (no-shame palette).
+    private var color: Color {
+        mission.type == .streakExtend ? Theme.amber : Color(hex: mission.type.color)
+    }
 
     private var accessibilityText: String {
         if mission.isCompleted {

@@ -1,7 +1,9 @@
 name: iOS Build & Test
 
 on:
+  # Branch pushes are covered by the pull_request run; only build main directly.
   push:
+    branches: [main]
     paths-ignore:
       - "**.md"
       - "demo/**"

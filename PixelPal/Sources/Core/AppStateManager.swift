@@ -225,21 +225,17 @@ class AppStateManager: ObservableObject {
     // MARK: - Private Helpers
 
     private func updateWeeklyChallengeProgress(todaySteps: Int) {
-        guard let challenge = missionManager.weeklyChallenge, !challenge.isCompleted else { return }
+        // Don't bail on a completed challenge: a new week must still roll over.
+        guard let before = missionManager.weeklyChallenge else { return }
+        let alreadyCompletedID = before.isCompleted ? before.id : nil
 
-        let weekData = HistoryManager.shared.history.weekViewData()
-        let activeDays = weekData.filter { $0.isGoalMet }.count
-        let bestDay = weekData.map(\.steps).max() ?? todaySteps
+        let days = HistoryManager.shared.history.days.map {
+            WeeklyChallengeProgress.DayTotal(date: $0.date, steps: $0.steps, goalMet: $0.isGoalMet)
+        }
+        missionManager.updateWeeklyProgress(days: days)
 
-        let wasCompleted = challenge.isCompleted
-        missionManager.updateWeeklyProgress(
-            weeklySteps: weeklySteps,
-            activeDaysThisWeek: activeDays,
-            bestDayThisWeek: bestDay
-        )
-
-        // Award coins if just completed
-        if let updated = missionManager.weeklyChallenge, updated.isCompleted && !wasCompleted {
+        // Pay once, when this week's challenge completes.
+        if let updated = missionManager.weeklyChallenge, updated.isCompleted, updated.id != alreadyCompletedID {
             celebrate(.weeklyChallenge(title: updated.title), coins: updated.coinReward)
         }
     }

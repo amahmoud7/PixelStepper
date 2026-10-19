@@ -34,6 +34,19 @@ final class ScreenshotTests: XCTestCase {
         pause()
         snap("11-home-scrolled")
 
+        // Share sheet from Home's top bar.
+        app.swipeDown()
+        pause()
+        let share = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] 'share'")).firstMatch
+        if share.waitForExistence(timeout: 3) {
+            share.tap()
+            pause(2)
+            snap("50-share")
+            let done = app.buttons["Done"]
+            if done.waitForExistence(timeout: 3) { done.tap() } else { app.swipeDown() }
+            pause()
+        }
+
         app.tabBars.buttons["Stats"].tap()
         pause()
         snap("20-stats")

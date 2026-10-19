@@ -15,11 +15,9 @@ class MissionManager: ObservableObject {
         DailyGoalState.dayKey(for: Date())
     }
 
+    /// ISO week key (Monday start), independent of the user's locale.
     private var weekString: String {
-        let calendar = Calendar.current
-        let year = calendar.component(.yearForWeekOfYear, from: Date())
-        let week = calendar.component(.weekOfYear, from: Date())
-        return "\(year)-W\(String(format: "%02d", week))"
+        WeeklyChallengeProgress.weekKey(for: Date())
     }
 
     // MARK: - Public API
@@ -81,23 +79,14 @@ class MissionManager: ObservableObject {
     }
 
     /// Updates weekly challenge progress.
-    func updateWeeklyProgress(weeklySteps: Int, activeDaysThisWeek: Int, bestDayThisWeek: Int) {
+    func updateWeeklyProgress(days: [WeeklyChallengeProgress.DayTotal]) {
+        // Calendar week rolled over while the app stayed open: switch to this week's challenge.
+        if weeklyChallenge != nil, loadWeeklyChallenge()?.weekString != weekString {
+            loadOrGenerateWeeklyChallenge(weeklyAverage: lastWeeklyAverage)
+        }
         guard var challenge = weeklyChallenge, !challenge.isCompleted else { return }
 
-        let newProgress: Int
-        switch challenge.type {
-        case .totalSteps:
-            newProgress = weeklySteps
-        case .activeDays:
-            newProgress = activeDaysThisWeek
-        case .streakWeek:
-            newProgress = activeDaysThisWeek
-        case .bigDay:
-            newProgress = bestDayThisWeek >= 10_000 ? 1 : 0
-        case .consistentWeek:
-            newProgress = activeDaysThisWeek
-        }
-
+        let newProgress = WeeklyChallengeProgress.progress(for: challenge.type, days: days)
         if newProgress != challenge.progress {
             challenge.progress = newProgress
             weeklyChallenge = challenge
@@ -200,7 +189,8 @@ class MissionManager: ObservableObject {
 
         switch type {
         case .totalSteps:
-            let baseTarget = max(35_000, (weeklyAverage / 1000) * 1000)
+            // `weeklyAverage` is a daily average; scale it to a week.
+            let baseTarget = max(35_000, (weeklyAverage * 7 / 1000) * 1000)
             let scaled = baseTarget + Int.random(in: 0...10_000, using: &rng)
             let rounded = (scaled / 5000) * 5000
             title = "Marathon Week"

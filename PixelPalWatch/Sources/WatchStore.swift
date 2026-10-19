@@ -24,7 +24,9 @@ final class WatchStore: NSObject, ObservableObject {
 
     override init() {
         // Last known values first, so the screen isn't empty before the phone checks in.
-        if let cached = UserDefaults.standard.dictionary(forKey: Self.cacheKey),
+        if WatchLaunch.demoData {
+            self.snapshot = WatchLaunch.Demo.snapshot
+        } else if let cached = UserDefaults.standard.dictionary(forKey: Self.cacheKey),
            let snapshot = WatchSnapshot(dictionary: cached) {
             self.snapshot = snapshot
         } else {
@@ -40,15 +42,23 @@ final class WatchStore: NSObject, ObservableObject {
     // MARK: - HealthKit
 
     func requestAuthorization() async {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard !WatchLaunch.demoData, HKHealthStore.isHealthDataAvailable() else { return }
         let steps = HKQuantityType(.stepCount)
         try? await healthStore.requestAuthorization(toShare: [], read: [steps])
     }
 
     /// Today's total and the last 7 days, in one collection query.
     func refresh() async {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
         let calendar = Calendar.current
+        if WatchLaunch.demoData {
+            let today = calendar.startOfDay(for: Date())
+            week = WatchLaunch.Demo.week.enumerated().compactMap { index, steps in
+                calendar.date(byAdding: .day, value: index - 6, to: today).map { Day(date: $0, steps: steps) }
+            }
+            todaySteps = WatchLaunch.Demo.todaySteps
+            return
+        }
+        guard HKHealthStore.isHealthDataAvailable() else { return }
         let now = Date()
         let today = calendar.startOfDay(for: now)
         guard let start = calendar.date(byAdding: .day, value: -6, to: today) else { return }

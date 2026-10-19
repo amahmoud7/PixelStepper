@@ -3,12 +3,13 @@ import SwiftUI
 @main
 struct PixelPalWatchApp: App {
     @StateObject private var store = WatchStore()
+    @State private var page = WatchLaunch.startPage
 
     var body: some Scene {
         WindowGroup {
-            TabView {
-                TodayView()
-                StreakView()
+            TabView(selection: $page) {
+                TodayView().tag(0)
+                StreakView().tag(1)
             }
             .tabViewStyle(.page)
             .environmentObject(store)

@@ -147,3 +147,66 @@ jobs:
           path: |
             screenshots
             ui.log
+
+  watch-screenshots:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build watch app for the simulator
+        run: |
+          xcodebuild -project PixelStepper.xcodeproj -target PixelPalWatch -sdk watchsimulator \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO SYMROOT="$PWD/wbuild" build \
+            > watch-build.log 2>&1 || { grep -E "error:" watch-build.log | sort -u | head -40; exit 1; }
+          ls wbuild/Debug-watchsimulator
+
+      - name: Capture watch screens (demo data)
+        run: |
+          UDID=$(python3 - <<'PY'
+          import json, subprocess, sys
+          run = lambda *a: subprocess.check_output(["xcrun", "simctl", *a], text=True)
+          runtimes = [r for r in json.loads(run("list", "runtimes", "-j"))["runtimes"]
+                      if r["platform"] == "watchOS" and r["isAvailable"]]
+          if not runtimes:
+              sys.exit(0)
+          runtime = sorted(runtimes, key=lambda r: [int(x) for x in r["version"].split(".")])[-1]
+          types = [t["identifier"] for t in runtime.get("supportedDeviceTypes", [])]
+          prefs = ["Apple-Watch-Ultra-3-49mm", "Apple-Watch-Ultra-2-49mm",
+                   "Apple-Watch-Series-11-46mm", "Apple-Watch-Series-10-46mm"]
+          chosen = next((t for p in prefs for t in types if t.endswith(p)), types[-1])
+          print(run("create", "Shots-watch", chosen, runtime["identifier"]).strip())
+          PY
+          )
+          if [ -z "$UDID" ]; then echo "::warning::No watchOS simulator runtime on this runner; skipping watch screenshots."; exit 0; fi
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" wbuild/Debug-watchsimulator/PixelPalWatch.app
+          mkdir -p watch-shots
+          for page in 0 1; do
+            xcrun simctl terminate "$UDID" com.pixelpalfit.app.watchkitapp || true
+            xcrun simctl launch "$UDID" com.pixelpalfit.app.watchkitapp -UITestDemoData -WatchPage $page
+            sleep 10
+            xcrun simctl io "$UDID" screenshot "watch-shots/W$page.png"
+          done
+          ls -la watch-shots
+
+      - name: Upload watch screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-screenshots
+          path: |
+            watch-shots
+            watch-build.log

@@ -253,7 +253,6 @@ class AppStateManager: ObservableObject {
 
         guard phaseFromWeekly > currentPhase else { return }
 
-        let oldPhase = currentPhase
         currentPhase = phaseFromWeekly
 
         PersistenceManager.shared.updateProgress { progress in

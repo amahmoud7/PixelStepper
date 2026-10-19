@@ -260,7 +260,7 @@ struct CosmeticCatalog {
         let pool = all.filter { !$0.isLimited && $0.rarity != .common }
         guard pool.count >= 3 else { return Array(pool.prefix(3)) }
 
-        var shuffled = pool.shuffled(using: &rng)
+        let shuffled = pool.shuffled(using: &rng)
         // Ensure variety — pick from different categories if possible
         var result: [CosmeticItem] = []
         var usedCategories = Set<CosmeticCategory>()

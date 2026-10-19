@@ -223,7 +223,7 @@ class HistoryManager: ObservableObject {
         // Ensure yesterday's data is preserved as-is
         // Steps will no longer update for yesterday
         let calendar = Calendar.current
-        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) else { return }
+        guard calendar.date(byAdding: .day, value: -1, to: Date()) != nil else { return }
         
         // Nothing special needed - steps won't be updated for past dates
         // Just persist current state

@@ -115,7 +115,7 @@ class MissionManager: ObservableObject {
         // String.hashValue is randomized per launch; use a stable hash so missions don't reshuffle.
         var rng = SeededRandomNumberGenerator(string: todayString)
 
-        var types = MissionType.allCases.shuffled(using: &rng)
+        let types = MissionType.allCases.shuffled(using: &rng)
         let missionCount = isPremium ? 5 : 3
 
         var result: [DailyMission] = []

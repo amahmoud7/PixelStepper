@@ -183,9 +183,8 @@ class AppStateManager: ObservableObject {
             )
         }
 
-        // Schedule streak-at-risk notification with real data
-        let stepsRemaining = max(0, 7500 - todaySteps)
-        NotificationManager.shared.scheduleStreakAtRisk(streak: currentStreak, stepsRemaining: stepsRemaining)
+        // Today's reminders drop once the goal is met; tonight's nudge mentions a live streak.
+        NotificationManager.shared.update(goalMetToday: todaySteps >= 7500, streak: currentStreak)
     }
 
     func backfillWeeklyHistory(from dailyMap: [Date: Int], healthManager: HealthKitManager) {

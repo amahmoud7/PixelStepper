@@ -68,13 +68,11 @@ struct ContentView: View {
             appState.backfillWeeklyHistory(from: dailyMap, healthManager: healthManager)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            NotificationManager.shared.scheduleReEngagement()
             appState.liveActivityManager.markIdle()
             // Finish pending writes before the app can be suspended.
             PersistenceManager.shared.flush()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            NotificationManager.shared.cancelReEngagement()
             NotificationManager.shared.refreshSchedule()
             // Refresh health data so SharedData + widget stay in sync
             healthManager.fetchData()

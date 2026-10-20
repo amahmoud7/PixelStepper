@@ -85,9 +85,13 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.pixelpalfit.app
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:
+          enabled: true
+        com.apple.HealthKit:
           enabled: true
 
   PixelPalTests:

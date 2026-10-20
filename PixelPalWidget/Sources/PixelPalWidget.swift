@@ -117,7 +117,7 @@ struct SimpleEntry: TimelineEntry {
         if !week.isEmpty { week[week.count - 1] = steps }
         return SimpleEntry(
             date: date,
-            state: AvatarState.determineState(steps: steps),
+            state: AvatarLogic.determineState(steps: steps),
             gender: gender,
             phase: phase,
             steps: steps,

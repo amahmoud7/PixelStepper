@@ -140,7 +140,8 @@ struct MonthCalendarView: View {
             legendItem(color: Theme.goalMet, label: "Met")
             legendItem(color: Theme.belowGoal, label: "Below goal")
         }
-        .accessibilityElement(children: .combine)
+        // Color key only; each day cell already says "goal met".
+        .accessibilityHidden(true)
     }
 
     private func legendItem(color: Color, label: String) -> some View {

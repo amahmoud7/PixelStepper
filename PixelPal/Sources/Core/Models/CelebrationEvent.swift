@@ -26,9 +26,15 @@ enum CelebrationEvent: Equatable, Identifiable {
         case .phaseEvolution(let phase): return "Phase \(phase) Unlocked!"
         case .dailyGoalMet: return "Goal Crushed!"
         case .personalRecord(let type, _): return "New \(type)!"
-        case .stepMilestone(let cumulative): return "\(MilestoneCalculator.formatMilestone(cumulative)) Steps!"
+        case .stepMilestone(let cumulative): return "\(MilestoneCalculator.shortMilestone(cumulative)) Steps!"
         case .weeklyChallenge: return "Weekly Challenge Complete!"
         }
+    }
+
+    /// VoiceOver form of `title`: reads "100k" as "100 k", so spell the number out.
+    var spokenTitle: String {
+        if case .stepMilestone(let cumulative) = self { return "\(cumulative.formatted()) Steps!" }
+        return title
     }
 
     var subtitle: String {

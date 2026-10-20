@@ -355,9 +355,9 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack {
-            // Never wraps ("Pha/se 2"), even with the evolve badge or large text.
+            // One line, shrinking to fit; never forces the bar wider than the screen.
             PhaseDisplayView(phase: appState.currentPhase, isPremium: appState.storeManager.isPremium)
-                .fixedSize()
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: Space.s)
 
@@ -400,6 +400,8 @@ struct HomeView: View {
             .accessibilityLabel("Share")
         }
         .padding(.horizontal, Space.screen)
+        // Bar chrome caps its text size like system navigation bars; content below keeps scaling.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
 }

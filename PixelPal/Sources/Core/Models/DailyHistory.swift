@@ -77,18 +77,6 @@ struct DailyHistory: Codable, Equatable {
         return days.last { $0.dateString == dateString }
     }
     
-    /// Gets today's state (creates if missing).
-    mutating func getOrCreateToday(goal: Int = 7500) -> DailyGoalState {
-        let today = Date()
-        if let existing = state(for: today) {
-            return existing
-        }
-        
-        let newDay = DailyGoalState.create(for: today, goal: goal)
-        recordDay(newDay)
-        return newDay
-    }
-    
     /// Updates today's step count.
     mutating func updateToday(steps: Int) {
         let today = Date()
@@ -157,11 +145,6 @@ struct DailyHistory: Codable, Equatable {
         return consecutiveMisses
     }
     
-    /// Checks if goal was met on a specific date.
-    func wasGoalMet(on date: Date) -> Bool {
-        return state(for: date)?.isGoalMet ?? false
-    }
-
     /// Counts consecutive days with goal met, ending at yesterday (today is still in progress).
     func countConsecutiveGoalsMet() -> Int {
         let index = indexByDay()

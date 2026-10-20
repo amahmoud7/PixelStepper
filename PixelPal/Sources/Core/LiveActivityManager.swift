@@ -269,15 +269,4 @@ class LiveActivityManager: ObservableObject {
             }
         }
     }
-
-    /// Ends all Pixel Stepper Live Activities (cleanup utility).
-    func endAllActivities() {
-        Task {
-            for activity in Activity<PixelStepperAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
-            self.currentActivity = nil
-            self.isActive = false
-        }
-    }
 }

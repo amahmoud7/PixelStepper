@@ -122,6 +122,9 @@ jobs:
           mkdir -p screenshots
           if [ "${{ matrix.device }}" = "appstore" ]; then
             ONLY="-only-testing:PixelPalUITests/ScreenshotTests/test_3_appStore -only-testing:PixelPalUITests/ScreenshotTests/test_4_appStoreEvolve"
+          elif [ "${{ matrix.device }}" = "small" ]; then
+            # Smallest screen also gets the largest accessibility text size.
+            ONLY="-only-testing:PixelPalUITests/ScreenshotTests/test_1_onboarding -only-testing:PixelPalUITests/ScreenshotTests/test_2_mainTabs -only-testing:PixelPalUITests/ScreenshotTests/test_5_largeText"
           else
             ONLY="-only-testing:PixelPalUITests/ScreenshotTests/test_1_onboarding -only-testing:PixelPalUITests/ScreenshotTests/test_2_mainTabs"
           fi

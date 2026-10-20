@@ -226,16 +226,6 @@ class StoreManager: ObservableObject {
         products.first { $0.id == ProductID.yearlyPremium.rawValue }
     }
 
-    /// Formatted price for monthly subscription.
-    var monthlyPriceString: String {
-        monthlyProduct?.displayPrice ?? "$2.99/month"
-    }
-
-    /// Formatted price for yearly subscription.
-    var yearlyPriceString: String {
-        yearlyProduct?.displayPrice ?? "$19.99/year"
-    }
-
     /// Whether the user is eligible for a free trial on a given product.
     func isTrialEligible(for product: Product) async -> Bool {
         guard let subscription = product.subscription else { return false }
@@ -243,24 +233,26 @@ class StoreManager: ObservableObject {
         return status
     }
 
-    /// Gets the trial period description (e.g. "7 days free") for a product.
-    func trialDescription(for product: Product) -> String? {
+    /// Free-trial length for a product ("1 week", "7 days"), or nil without a free trial.
+    func trialLength(for product: Product) -> String? {
         guard let subscription = product.subscription,
               let introOffer = subscription.introductoryOffer,
               introOffer.paymentMode == .freeTrial else { return nil }
 
         let period = introOffer.period
-        switch period.unit {
-        case .day:
-            return "\(period.value) day\(period.value > 1 ? "s" : "") free"
-        case .week:
-            return "\(period.value) week\(period.value > 1 ? "s" : "") free"
-        case .month:
-            return "\(period.value) month\(period.value > 1 ? "s" : "") free"
-        case .year:
-            return "\(period.value) year\(period.value > 1 ? "s" : "") free"
-        @unknown default:
-            return "Free trial"
+        guard let unit = PeriodUnit(period.unit) else { return nil }
+        return PeriodText.count(period.value, unit)
+    }
+}
+
+extension PeriodUnit {
+    init?(_ unit: Product.SubscriptionPeriod.Unit) {
+        switch unit {
+        case .day: self = .day
+        case .week: self = .week
+        case .month: self = .month
+        case .year: self = .year
+        @unknown default: return nil
         }
     }
 }
@@ -269,14 +261,11 @@ class StoreManager: ObservableObject {
 
 enum StoreError: LocalizedError {
     case failedVerification
-    case productNotFound
 
     var errorDescription: String? {
         switch self {
         case .failedVerification:
             return "Transaction verification failed."
-        case .productNotFound:
-            return "Product not found."
         }
     }
 }

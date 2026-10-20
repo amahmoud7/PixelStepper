@@ -103,7 +103,7 @@ struct OnboardingView: View {
             }
         }
         // Pages scroll, so allow large sizes; cap only the extreme accessibility sizes.
-        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     private func nextStep() {

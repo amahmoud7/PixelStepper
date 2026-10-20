@@ -46,7 +46,7 @@ struct PaywallView: View {
                     // Evolution timeline
                     EvolutionTimeline(gender: gender, currentPhase: currentPhase)
                         .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 16)
+                        .offset(y: appeared || reduceMotion ? 0 : 16)
 
                     Spacer().frame(height: Space.xl)
 
@@ -212,14 +212,16 @@ struct PaywallView: View {
                         : [Theme.surfaceStrong, Theme.surface]
                 ))
                 .disabled(selectedProduct == nil || isPurchasing)
+                .accessibilityLabel(isPurchasing ? "Purchasing" : purchaseButtonTitle)
 
                 // Price disclosure directly under the CTA
-                if let disclosure = priceDisclosure {
+                if let disclosure = priceDisclosure(spoken: false) {
                     Text(disclosure)
                         .font(.ppCaption)
                         .foregroundColor(Theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(priceDisclosure(spoken: true) ?? disclosure)
                 }
 
                 if storeManager.purchaseIsPending {
@@ -286,11 +288,10 @@ struct PaywallView: View {
         }
     }
 
-    /// Trial length for the selected plan without the trailing " free" ("1 week"), when the user can claim it.
+    /// Trial length for the selected plan ("1 week"), when the user can claim it.
     private var selectedTrialLength: String? {
-        guard isTrialEligible, let product = selectedProduct,
-              let trialText = storeManager.trialDescription(for: product) else { return nil }
-        return trialText.replacingOccurrences(of: " free", with: "")
+        guard isTrialEligible, let product = selectedProduct else { return nil }
+        return storeManager.trialLength(for: product)
     }
 
     private var purchaseButtonTitle: String {
@@ -299,9 +300,10 @@ struct PaywallView: View {
     }
 
     /// "1 week free, then $29.99/year. Cancel anytime in Settings."
-    private var priceDisclosure: String? {
+    /// `spoken` swaps "/year" for "per year" (VoiceOver reads the slash).
+    private func priceDisclosure(spoken: Bool) -> String? {
         guard let product = selectedProduct else { return nil }
-        let price = "\(product.displayPrice)\(periodSuffix(for: product))"
+        let price = "\(product.displayPrice)\(periodSuffix(for: product, spoken: spoken))"
         let renewal = "Auto-renews unless cancelled at least 24 hours before the period ends."
         if let trial = selectedTrialLength {
             return "\(trial) free, then \(price). Cancel anytime in Settings. \(renewal)"
@@ -310,17 +312,12 @@ struct PaywallView: View {
     }
 
     /// "/year", "/month", "/3 months"; empty for non-subscription products.
-    private func periodSuffix(for product: Product) -> String {
-        guard let period = product.subscription?.subscriptionPeriod else { return "" }
-        let unit: String
-        switch period.unit {
-        case .day: unit = "day"
-        case .week: unit = "week"
-        case .month: unit = "month"
-        case .year: unit = "year"
-        default: unit = "period"
-        }
-        return period.value == 1 ? "/\(unit)" : "/\(period.value) \(unit)s"
+    private func periodSuffix(for product: Product, spoken: Bool = false) -> String {
+        guard let period = product.subscription?.subscriptionPeriod,
+              let unit = PeriodUnit(period.unit) else { return "" }
+        return spoken
+            ? " " + PeriodText.spokenPerPeriod(period.value, unit)
+            : PeriodText.perPeriod(period.value, unit)
     }
 
     // MARK: - Actions
@@ -550,13 +547,36 @@ private struct PlanCard: View {
         return (product.price / 12).formatted(product.priceFormatStyle)
     }
 
+    private var period: (value: Int, unit: PeriodUnit)? {
+        guard let sub = product.subscription, let unit = PeriodUnit(sub.subscriptionPeriod.unit) else { return nil }
+        return (sub.subscriptionPeriod.value, unit)
+    }
+
+    /// "$29.99/yr" for single periods; spelled out ("/3 months") otherwise.
     private var priceWithPeriod: String {
-        guard let sub = product.subscription else { return product.displayPrice }
-        switch sub.subscriptionPeriod.unit {
-        case .month: return "\(product.displayPrice)/mo"
-        case .year: return "\(product.displayPrice)/yr"
-        default: return product.displayPrice
+        guard let period else { return product.displayPrice }
+        switch (period.value, period.unit) {
+        case (1, .month): return "\(product.displayPrice)/mo"
+        case (1, .year): return "\(product.displayPrice)/yr"
+        default: return product.displayPrice + PeriodText.perPeriod(period.value, period.unit)
         }
+    }
+
+    /// VoiceOver reads "/yr" literally; speak "29.99 dollars per year" instead.
+    private var accessibilityText: String {
+        var parts = [product.displayName]
+        if let badge { parts.append(badge.capitalized) }
+        if let period {
+            parts.append("\(product.displayPrice) \(PeriodText.spokenPerPeriod(period.value, period.unit))")
+        } else {
+            parts.append(product.displayPrice)
+        }
+        if let perMonthText {
+            parts.append("just \(perMonthText) per month")
+        } else {
+            parts.append(product.description)
+        }
+        return parts.joined(separator: ", ")
     }
 
     var body: some View {
@@ -616,6 +636,9 @@ private struct PlanCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PPPressableStyle())
+        .accessibilityLabel(accessibilityText)
+        // Voice Control: "Tap Yearly" rather than the whole spoken label.
+        .accessibilityInputLabels([product.displayName])
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

@@ -9,11 +9,6 @@ struct PhaseCalculator {
     static let phase2Max = 50_000    // ~7,143/day to reach Phase 3
     static let phase3Max = 75_000    // ~10,714/day to reach Phase 4
 
-    // Threshold aliases for ContentView compatibility
-    static let phase2Threshold = phase1Max
-    static let phase3Threshold = phase2Max
-    static let phase4Threshold = phase3Max
-
     /// Returns the step threshold for the next phase.
     static func nextThreshold(for phase: Int) -> Int {
         switch phase {
@@ -23,22 +18,6 @@ struct PhaseCalculator {
         default: return phase3Max
         }
     }
-
-    /// Phase names for display.
-    static let phaseNames = [
-        1: "Seedling",
-        2: "Growing",
-        3: "Thriving",
-        4: "Legendary"
-    ]
-
-    /// Phase descriptions for UI.
-    static let phaseDescriptions = [
-        1: "This is the beginning.",
-        2: "Movement is becoming part of you.",
-        3: "This is momentum.",
-        4: "You've changed."
-    ]
 
     /// Calculates the phase a user would earn based on weekly steps.
     /// - Parameters:
@@ -55,32 +34,6 @@ struct PhaseCalculator {
             return isPremium ? 3 : 2
         default:
             return isPremium ? 4 : 2
-        }
-    }
-
-    /// Returns the accessible phase (considering premium status).
-    /// - Parameters:
-    ///   - totalSteps: Cumulative steps since app creation.
-    ///   - isPremium: Whether the user has premium subscription.
-    /// - Returns: The highest phase the user can access.
-    static func accessiblePhase(totalSteps: Int, isPremium: Bool) -> Int {
-        return currentPhase(totalSteps: totalSteps, isPremium: isPremium)
-    }
-
-    /// Returns the earned phase (ignoring premium status).
-    /// Used to determine if paywall should be shown.
-    /// - Parameter totalSteps: Cumulative steps since app creation.
-    /// - Returns: Phase number based purely on steps (1-4).
-    static func earnedPhase(totalSteps: Int) -> Int {
-        switch totalSteps {
-        case 0...phase1Max:
-            return 1
-        case (phase1Max + 1)...phase2Max:
-            return 2
-        case (phase2Max + 1)...phase3Max:
-            return 3
-        default:
-            return 4
         }
     }
 
@@ -105,37 +58,6 @@ struct PhaseCalculator {
         let threshold = nextThreshold(for: currentPhase)
         return max(0, threshold - weeklySteps)
     }
-
-    /// Checks if a phase transition just occurred.
-    /// - Parameters:
-    ///   - previousSteps: Previous cumulative step count.
-    ///   - currentSteps: Current cumulative step count.
-    /// - Returns: The new phase if a transition occurred, nil otherwise.
-    static func checkPhaseTransition(previousSteps: Int, currentSteps: Int) -> Int? {
-        let previousPhase = earnedPhase(totalSteps: previousSteps)
-        let currentPhase = earnedPhase(totalSteps: currentSteps)
-
-        if currentPhase > previousPhase {
-            return currentPhase
-        }
-        return nil
-    }
-
-    /// Checks if user should see paywall (earned Phase 3+ but not premium).
-    /// - Parameters:
-    ///   - totalSteps: Cumulative steps since app creation.
-    ///   - isPremium: Whether the user has premium subscription.
-    ///   - hasSeenPaywall: Whether user has already seen the paywall.
-    /// - Returns: True if paywall should be shown.
-    static func shouldShowPaywall(
-        totalSteps: Int,
-        isPremium: Bool,
-        hasSeenPaywall: Bool
-    ) -> Bool {
-        guard !isPremium && !hasSeenPaywall else { return false }
-        let earned = earnedPhase(totalSteps: totalSteps)
-        return earned >= 3
-    }
 }
 
 /// Milestone thresholds for celebration display.
@@ -155,16 +77,19 @@ struct MilestoneCalculator {
     }
 
     /// Formats a milestone for display (e.g., "5k!", "100k!").
-    /// - Parameter milestone: The milestone value.
-    /// - Returns: Formatted string for display.
     static func formatMilestone(_ milestone: Int) -> String {
+        shortMilestone(milestone) + "!"
+    }
+
+    /// Compact milestone without punctuation ("5k", "2.5k", "1M").
+    static func shortMilestone(_ milestone: Int) -> String {
         let oneDecimal = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...1))
         if milestone >= 1_000_000 {
-            return "\((Double(milestone) / 1_000_000).formatted(oneDecimal))M!"
+            return "\((Double(milestone) / 1_000_000).formatted(oneDecimal))M"
         } else if milestone >= 1_000 {
-            return "\((Double(milestone) / 1_000).formatted(oneDecimal))k!"
+            return "\((Double(milestone) / 1_000).formatted(oneDecimal))k"
         } else {
-            return "\(milestone)!"
+            return "\(milestone)"
         }
     }
 }

@@ -29,20 +29,28 @@ struct Provider: TimelineProvider {
             completion(Self.demo)
             return
         }
-        completion(Self.loadEntry(date: Date()))
+        Task { completion(await Self.liveEntry(date: Date())) }
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> ()) {
-        let now = Date()
-        let entry = Self.loadEntry(date: now)
-        // Data only changes when the app pushes a reload, so refresh hourly at most,
-        // and always at midnight so today's count resets to 0.
-        let calendar = Calendar.current
-        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
-            ?? now.addingTimeInterval(3600)
-        let nextUpdate = min(now.addingTimeInterval(3600), startOfTomorrow)
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
-        completion(timeline)
+        Task {
+            let now = Date()
+            let entry = await Self.liveEntry(date: now)
+            // Hourly (steps are read live from Health), and always at midnight so today resets to 0.
+            let calendar = Calendar.current
+            let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+                ?? now.addingTimeInterval(3600)
+            let nextUpdate = min(now.addingTimeInterval(3600), startOfTomorrow)
+            completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+        }
+    }
+
+    /// Saved snapshot, upgraded with Health's live count when it's ahead
+    /// (it isn't readable while the phone is locked, so the snapshot stays the floor).
+    private static func liveEntry(date: Date) async -> SimpleEntry {
+        let saved = loadEntry(date: date)
+        guard let live = await WidgetHealth.todaySteps(now: date), live > saved.steps else { return saved }
+        return saved.withTodaySteps(live)
     }
 
     /// Loads entry from SharedData with safe fallbacks.
@@ -102,6 +110,25 @@ struct SimpleEntry: TimelineEntry {
     let cosmeticHat: String?
     let cosmeticAccessory: String?
     let cosmeticSkin: String?
+
+    /// Same entry with today's count (and the state and week bar derived from it) replaced.
+    func withTodaySteps(_ steps: Int) -> SimpleEntry {
+        var week = weekData
+        if !week.isEmpty { week[week.count - 1] = steps }
+        return SimpleEntry(
+            date: date,
+            state: AvatarLogic.determineState(steps: steps),
+            gender: gender,
+            phase: phase,
+            steps: steps,
+            cumulativeSteps: cumulativeSteps + max(0, steps - self.steps),
+            weekData: week,
+            cosmeticBackground: cosmeticBackground,
+            cosmeticHat: cosmeticHat,
+            cosmeticAccessory: cosmeticAccessory,
+            cosmeticSkin: cosmeticSkin
+        )
+    }
 }
 
 // MARK: - Color & Phase Helpers

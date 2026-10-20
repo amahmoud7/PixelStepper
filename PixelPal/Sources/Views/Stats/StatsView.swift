@@ -72,6 +72,7 @@ private struct ThisWeekCard: View {
                 Text("\(daysAtGoal) of 7 days at goal · \(totalSteps.formatted()) steps")
                     .font(.ppCaption)
                     .foregroundColor(Theme.textSecondary)
+                    .accessibilityLabel("\(daysAtGoal) of 7 days at goal, \(totalSteps.formatted()) steps")
             }
 
             Chart {
@@ -89,7 +90,8 @@ private struct ThisWeekCard: View {
                 RuleMark(y: .value("Goal", goal))
                     .foregroundStyle(Theme.textTertiary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    .annotation(position: .top, alignment: .trailing) {
+                    // Leading, so it never collides with the trailing y-axis labels.
+                    .annotation(position: .top, alignment: .leading) {
                         Text("Goal")
                             .font(.ppMicro)
                             .foregroundColor(Theme.textTertiary)
@@ -104,6 +106,8 @@ private struct ThisWeekCard: View {
                 }
             }
             .frame(height: 160)
+            // Axis labels are chart chrome; cap them so bars keep their room at accessibility sizes.
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
         }
         .glassCard()
     }
@@ -171,36 +175,82 @@ private struct PhaseProgressCard: View {
         Theme.phaseName(currentPhase + 1)
     }
 
+    private var phaseTitle: some View {
+        Text("Phase progress")
+            .font(.ppSection)
+            .foregroundColor(Theme.textPrimary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var stepCount: some View {
+        Text(weeklySteps.formatted())
+            .font(.ppStat)
+            .foregroundColor(Theme.textPrimary)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .layoutPriority(1)
+            .numericRoll(value: weeklySteps)
+    }
+
+    private var percentText: some View {
+        Text("\(Int(progress * 100))%")
+            .font(.ppBody.weight(.bold))
+            .foregroundColor(progressTextColor)
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
+            .numericRoll(value: progress)
+    }
+
+    private var phaseLabel: some View {
+        Text("Phase \(currentPhase) · \(phaseName)")
+            .font(.ppCaption.weight(.semibold))
+            .foregroundColor(progressTextColor)
+            .accessibilityLabel("Phase \(currentPhase), \(phaseName)")
+    }
+
     var body: some View {
         VStack(spacing: Space.m) {
-            HStack {
-                Text("Phase progress")
-                    .font(.ppSection)
-                    .foregroundColor(Theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Text("Phase \(currentPhase) · \(phaseName)")
-                    .font(.ppCaption.weight(.semibold))
-                    .foregroundColor(progressTextColor)
+            // Side by side when it fits; stacked at large text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    phaseTitle
+                    Spacer()
+                    phaseLabel
+                }
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    phaseTitle
+                    phaseLabel
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if currentPhase < 4 {
                 // Step count display
-                HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
-                    Text(weeklySteps.formatted())
-                        .font(.ppStat)
-                        .foregroundColor(Theme.textPrimary)
-                        .monospacedDigit()
-                        .numericRoll(value: weeklySteps)
-                    Text("/ \(nextThreshold.formatted()) steps")
-                        .font(.ppBody)
-                        .foregroundColor(Theme.textSecondary)
-                    Spacer()
-                    Text("\(Int(progress * 100))%")
-                        .font(.ppBody.weight(.bold))
-                        .foregroundColor(progressTextColor)
-                        .monospacedDigit()
-                        .numericRoll(value: progress)
+                // One row when it fits; otherwise the count and "of N steps" stack instead of
+                // the target wrapping word by word under the number.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: Space.xxs) {
+                        stepCount
+                        Text("/ \(nextThreshold.formatted()) steps")
+                            .font(.ppBody)
+                            .foregroundColor(Theme.textSecondary)
+                            .lineLimit(1)
+                            .fixedSize()
+                        Spacer(minLength: Space.s)
+                        percentText
+                    }
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        HStack(alignment: .firstTextBaseline) {
+                            stepCount
+                            Spacer(minLength: Space.s)
+                            percentText
+                        }
+                        Text("of \(nextThreshold.formatted()) steps")
+                            .font(.ppBody)
+                            .foregroundColor(Theme.textSecondary)
+                    }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(weeklySteps.formatted()) of \(nextThreshold.formatted()) steps this week")
@@ -248,6 +298,7 @@ private struct PhaseProgressCard: View {
                 } else {
                     let remaining = max(0, nextThreshold - weeklySteps)
                     Text("\(remaining.formatted()) steps to \(nextPhaseName) · resets weekly")
+                        .accessibilityLabel("\(remaining.formatted()) steps to \(nextPhaseName), resets weekly")
                         .font(.ppMicro)
                         .foregroundColor(Theme.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -258,6 +309,9 @@ private struct PhaseProgressCard: View {
                         .font(.ppStat)
                         .foregroundColor(Theme.textPrimary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .layoutPriority(1)
                         .numericRoll(value: weeklySteps)
                     Text("steps this week")
                         .font(.ppBody)

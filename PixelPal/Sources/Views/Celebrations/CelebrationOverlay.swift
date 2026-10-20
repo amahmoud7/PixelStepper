@@ -113,6 +113,7 @@ struct CelebrationOverlay: View {
                     .padding(.horizontal, Space.xl)
                     .opacity(isShowing ? 1 : 0)
                     .offset(y: isShowing || reduceMotion ? 0 : 15)
+                    .accessibilityLabel(event.spokenTitle)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($titleFocused)
 
@@ -158,6 +159,8 @@ struct CelebrationOverlay: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
+            // Custom overlay, not a sheet: wire up the two-finger scrub dismiss.
+            .accessibilityAction(.escape) { dismiss() }
         }
         .onAppear {
             Haptics.prepare()

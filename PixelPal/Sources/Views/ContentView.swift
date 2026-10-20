@@ -68,13 +68,11 @@ struct ContentView: View {
             appState.backfillWeeklyHistory(from: dailyMap, healthManager: healthManager)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            NotificationManager.shared.scheduleReEngagement()
             appState.liveActivityManager.markIdle()
             // Finish pending writes before the app can be suspended.
             PersistenceManager.shared.flush()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            NotificationManager.shared.cancelReEngagement()
             NotificationManager.shared.refreshSchedule()
             // Refresh health data so SharedData + widget stay in sync
             healthManager.fetchData()
@@ -156,6 +154,13 @@ struct PhaseDisplayView: View {
     private var phaseIcon: String { Theme.phaseIcon(phase) }
     private var phaseName: String { Theme.phaseName(phase) }
 
+    private var phaseText: some View {
+        Text("Phase \(phase)")
+            .font(.headline)
+            .foregroundColor(.white)
+            .lineLimit(1)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: phaseIcon)
@@ -163,13 +168,17 @@ struct PhaseDisplayView: View {
                 .foregroundColor(phaseColor)
                 .accessibilityHidden(true)
 
-            Text("Phase \(phase)")
-                .font(.headline)
-                .foregroundColor(.white)
-
-            Text("\u{2022} \(phaseName)")
-                .font(.subheadline)
-                .foregroundColor(phaseColor)
+            // One line always: with the name when it fits, otherwise just "Phase N" (never "Gro…").
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    phaseText
+                    Text("\u{2022} \(phaseName)")
+                        .font(.subheadline)
+                        .foregroundColor(phaseColor)
+                        .lineLimit(1)
+                }
+                phaseText
+            }
 
             if isPremium {
                 Image(systemName: "crown.fill")
@@ -178,9 +187,12 @@ struct PhaseDisplayView: View {
                     .accessibilityLabel("Premium")
             }
         }
+        .minimumScaleFactor(0.7)
         .padding(.horizontal, Space.l)
         .padding(.vertical, Space.s)
         .background(phaseColor.opacity(0.2), in: Capsule())
-        .accessibilityElement(children: .combine)
+        // Explicit: "•" is spoken as "bullet", and the compact variant drops the name.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Phase \(phase), \(phaseName)" + (isPremium ? ", Premium" : ""))
     }
 }

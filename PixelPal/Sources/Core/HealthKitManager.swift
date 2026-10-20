@@ -38,6 +38,16 @@ class HealthKitManager: ObservableObject {
     /// Throttles duplicate fetches fired by launch/foreground/authorization in quick succession.
     private var lastFetch = Date.distantPast
     private let fetchThrottle: TimeInterval = 5
+    private var trailingFetchPending = false
+
+    /// Live updates while the app is open: fires when the phone or a paired Watch saves new step samples.
+    private var stepObserver: HKObserverQuery?
+    private var dayChangeObserver: NSObjectProtocol?
+
+    deinit {
+        if let stepObserver { healthStore.stop(stepObserver) }
+        if let dayChangeObserver { NotificationCenter.default.removeObserver(dayChangeObserver) }
+    }
 
     private var stepType: HKQuantityType {
         HKQuantityType.quantityType(forIdentifier: .stepCount)!
@@ -61,6 +71,7 @@ class HealthKitManager: ObservableObject {
                 self.isAuthorized = success
                 // Always try to fetch data — if denied, queries return 0 silently.
                 self.fetchData(force: true)
+                self.startLiveUpdates()
                 completion(success)
             }
         }
@@ -72,11 +83,41 @@ class HealthKitManager: ObservableObject {
             applyDemoData()
             return
         }
-        guard force || Date().timeIntervalSince(lastFetch) > fetchThrottle else { return }
+        if !force, Date().timeIntervalSince(lastFetch) <= fetchThrottle {
+            // Throttled: run once at the end of the window so the last samples of a burst aren't dropped.
+            guard !trailingFetchPending else { return }
+            trailingFetchPending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + fetchThrottle) { [weak self] in
+                self?.trailingFetchPending = false
+                self?.fetchData(force: true)
+            }
+            return
+        }
         lastFetch = Date()
         fetchTodaySteps()
         fetchDailyStepsLast7Days()
         fetchMissionWindows()
+    }
+
+    /// Keeps today's count current while the app stays open (no background delivery needed),
+    /// and resets it at midnight instead of showing yesterday's total until the next foreground.
+    private func startLiveUpdates() {
+        guard stepObserver == nil, !LaunchFlags.demoData else { return }
+
+        let query = HKObserverQuery(sampleType: stepType, predicate: nil) { [weak self] _, completionHandler, error in
+            completionHandler()
+            guard error == nil else { return }
+            // Throttled: bursts of samples (e.g. a Watch sync) collapse into a trailing fetch.
+            DispatchQueue.main.async { self?.fetchData() }
+        }
+        stepObserver = query
+        healthStore.execute(query)
+
+        dayChangeObserver = NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.fetchData(force: true)
+        }
     }
 
     /// Morning (00:00–12:00) and evening (17:00–now) totals, so missions count real windows.

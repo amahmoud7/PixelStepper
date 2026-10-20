@@ -38,6 +38,7 @@ class HealthKitManager: ObservableObject {
     /// Throttles duplicate fetches fired by launch/foreground/authorization in quick succession.
     private var lastFetch = Date.distantPast
     private let fetchThrottle: TimeInterval = 5
+    private var trailingFetchPending = false
 
     /// Live updates while the app is open: fires when the phone or a paired Watch saves new step samples.
     private var stepObserver: HKObserverQuery?
@@ -82,7 +83,16 @@ class HealthKitManager: ObservableObject {
             applyDemoData()
             return
         }
-        guard force || Date().timeIntervalSince(lastFetch) > fetchThrottle else { return }
+        if !force, Date().timeIntervalSince(lastFetch) <= fetchThrottle {
+            // Throttled: run once at the end of the window so the last samples of a burst aren't dropped.
+            guard !trailingFetchPending else { return }
+            trailingFetchPending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + fetchThrottle) { [weak self] in
+                self?.trailingFetchPending = false
+                self?.fetchData(force: true)
+            }
+            return
+        }
         lastFetch = Date()
         fetchTodaySteps()
         fetchDailyStepsLast7Days()
@@ -97,7 +107,7 @@ class HealthKitManager: ObservableObject {
         let query = HKObserverQuery(sampleType: stepType, predicate: nil) { [weak self] _, completionHandler, error in
             completionHandler()
             guard error == nil else { return }
-            // Throttled: bursts of samples (e.g. a Watch sync) collapse into one fetch.
+            // Throttled: bursts of samples (e.g. a Watch sync) collapse into a trailing fetch.
             DispatchQueue.main.async { self?.fetchData() }
         }
         stepObserver = query

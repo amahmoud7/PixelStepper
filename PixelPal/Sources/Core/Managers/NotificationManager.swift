@@ -34,6 +34,8 @@ final class NotificationManager {
     /// Last inputs the schedule was built from, so step-count ticks don't reschedule every time.
     private var lastPlanKey: String?
     private var goalMetToday = false
+    /// Day `goalMetToday` was reported for; yesterday's "met" must not silence today.
+    private var goalMetDay: Date?
     private var streak = 0
     /// Rebuilds run one after another, so an older plan can't land after a newer one.
     private var scheduleTask: Task<Void, Never>?
@@ -51,6 +53,7 @@ final class NotificationManager {
     /// Call when today's progress changes; only reschedules when the outcome would differ.
     func update(goalMetToday: Bool, streak: Int) {
         self.goalMetToday = goalMetToday
+        self.goalMetDay = Calendar.current.startOfDay(for: Date())
         self.streak = streak
         reschedule()
     }
@@ -58,11 +61,12 @@ final class NotificationManager {
     private func reschedule() {
         let now = Date()
         let day = Calendar.current.startOfDay(for: now)
-        let key = "\(day.timeIntervalSince1970)|\(goalMetToday)|\(streak)"
+        let goalMet = goalMetToday && goalMetDay == day
+        let key = "\(day.timeIntervalSince1970)|\(goalMet)|\(streak)"
         guard key != lastPlanKey else { return }
         lastPlanKey = key
 
-        let plan = ReminderPlanner.plan(now: now, goalMetToday: goalMetToday, streak: streak)
+        let plan = ReminderPlanner.plan(now: now, goalMetToday: goalMet, streak: streak)
         scheduleTask = Task { [previous = scheduleTask] in
             await previous?.value
             let pending = await center.pendingNotificationRequests()

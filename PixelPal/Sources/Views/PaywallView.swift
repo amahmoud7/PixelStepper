@@ -571,7 +571,11 @@ private struct PlanCard: View {
         } else {
             parts.append(product.displayPrice)
         }
-        if let perMonthText { parts.append("just \(perMonthText) per month") }
+        if let perMonthText {
+            parts.append("just \(perMonthText) per month")
+        } else {
+            parts.append(product.description)
+        }
         return parts.joined(separator: ", ")
     }
 
@@ -633,6 +637,8 @@ private struct PlanCard: View {
         }
         .buttonStyle(PPPressableStyle())
         .accessibilityLabel(accessibilityText)
+        // Voice Control: "Tap Yearly" rather than the whole spoken label.
+        .accessibilityInputLabels([product.displayName])
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

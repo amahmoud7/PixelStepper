@@ -10,7 +10,8 @@ struct PlannedReminder: Equatable {
 
 /// Decides which reminders to send over the next week: at most a morning and an evening one per day,
 /// nothing for a day whose goal is already met, and streak copy only for tonight (future streaks are unknown).
-/// One-shot dates instead of repeating triggers, so a met goal can actually cancel the evening nudge.
+/// One-shot dates instead of repeating triggers, so a met goal can cancel the evening nudge.
+/// That cancel happens when the app sees the new count (foreground only; there is no background delivery).
 enum ReminderPlanner {
     static let morningHour = 9
     static let eveningHour = 19

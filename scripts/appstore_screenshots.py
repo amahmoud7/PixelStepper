@@ -17,9 +17,9 @@ FONT = Path(os.environ.get("APPSTORE_FONT", r"C:\Windows\Fonts\segoeuib.ttf"))
 
 SHOTS = [  # (raw file stem prefix, caption, crop as (top, bottom) fractions of the capture, or None)
     ("A1-home", "Meet your walking companion", None),
-    ("A3-missions", "Complete daily missions", (0.365, 1.0)),   # start at the step count
+    ("A3-missions", "Complete daily missions", None),
     ("A4-stats", "Track your streak & stats", None),
-    ("A5-premium", "Evolve through 4 phases", (0.0, 0.72)),   # price panel hidden in demo mode; keep content
+    ("A5-premium", "Evolve through 4 phases", None),
     ("A6-hook", "Choose your pixel companion", None),
 ]
 
